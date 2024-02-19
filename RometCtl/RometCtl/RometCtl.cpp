@@ -11,7 +11,7 @@
 
 
 // 唯一的应用程序对象
-
+//分支002
 CWinApp theApp;
 
 using namespace std;
