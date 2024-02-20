@@ -1,6 +1,74 @@
 #pragma once
 #include "pch.h"
 #include "framework.h"
+#define BUFFER_SIZE 4096
+
+class CPacket {
+public:
+	CPacket() :sHead(0), nLength(0), sCmd(0), sSum(0) {}
+	CPacket(const CPacket& pack) {
+		sHead = pack.sHead;
+		nLength = pack.nLength;
+		sCmd = pack.sCmd;
+		strData = pack.strData;
+		sSum = pack.sSum;
+	}
+	//解析数据
+	CPacket(const BYTE* pData, size_t& nSize) {
+		//找包头
+		size_t i{};
+		for (; i < nSize; i++) {
+			if (*(WORD*)(pData + i) == 0xFEFE) {
+				sHead = *(WORD*)(pData + i);
+				i += 2;  //i向后移动两字节，把包头部分除去
+				break;
+			}
+			if (i + 4 + 2 + 2 > nSize) { //包数据可能不全，或者包头未能全部接收到
+				nSize = 0;
+				return;
+			}
+			nLength = *(DWORD*)(pData + i); i += 4; //i向后移动4字节，除去长度数据
+			if (nLength + i > nSize) { //包未完全接收到，就返回解析失败
+				nSize = 0;
+				return;
+			}
+			sCmd = *(WORD*)(pData + i); i += 2; //i向后移动2字节，除去命令长度
+			if (nLength > 4) {
+				strData.resize(nLength - 2 - 2); //调整字符串的长度
+				memcpy((void*)strData.c_str(), pData + i, nLength - 4); //复制字符串
+				i += nLength - 4;
+			}
+			sSum = *(WORD*)(pData + i); i += 2;
+			WORD sum{};
+			for (size_t j{}; j < strData.size(); j++) {
+				sum += BYTE(strData[i]) & 0xFF;
+			}
+			if (sum == sSum) {
+				nSize = i; //不要忘记包头前面可能残余数据,一起销毁掉。
+				//nSize = nLength + 2 + 4; //包头部分+长度部分
+				return;
+			}
+			nSize = 0;
+		}
+	}
+	~CPacket() {}
+	CPacket& operator=(const CPacket& pack) {
+		if (this != &pack) {
+			sHead = pack.sHead;
+			nLength = pack.nLength;
+			sCmd = pack.sCmd;
+			strData = pack.strData;
+			sSum = pack.sSum;
+		}
+		return *this;   //实现连等
+	}
+public:
+	WORD sHead;           //包头 0xFEFE
+	DWORD nLength;        //包长度（从控制命令开始，到和校验结束）
+	WORD sCmd;            //控制命令
+	std::string strData;  //包数据
+	WORD sSum;            //和校验，只检验包数据的长度
+};
 
 class CServerSocket
 {
@@ -38,15 +106,26 @@ public:
 	}
 	int DealCommond(){
 		if (m_client == -1) return false;
-		char buffer[1024]{ "" };
+		char* buffer = new char[BUFFER_SIZE];
+		memset(buffer, 0, BUFFER_SIZE);
+		size_t index{};  
 		while (true)
 		{
-			int len = recv(m_client, buffer, sizeof(buffer), 0);
+			size_t len = recv(m_client, buffer + index, BUFFER_SIZE - index, 0);
 			if (len <= 0) {
 				return -1;
 			}
-			//TODO:处理命令
-
+			index += len;
+			len = index;
+			//调用重载等号运算符，创建匿名对象
+			//如果有多个包合在一起，调用这个构造函数len的值会变，第一个包头前的废数据+第一个数据包长度
+			m_packet = CPacket((BYTE*)buffer, len); 
+			if (len > 0) {
+				//读取完第一个数据包后，清楚这个数据包前面的内容，把后面的数据像前提。
+				memmove(buffer, buffer + len, BUFFER_SIZE - len);
+				index -= len;
+				return m_packet.sCmd;
+			}
 		}
 	}
 	bool Send(const char* pData, int nSize) {
@@ -57,6 +136,7 @@ public:
 private:
 	SOCKET m_sock;
 	SOCKET m_client;
+	CPacket m_packet;  //在CPacket类中必须要有复制构造函数
 	CServerSocket& operator=(const CServerSocket& ss) {}
 	CServerSocket(const CServerSocket& ss) {
 		m_sock = ss.m_sock;

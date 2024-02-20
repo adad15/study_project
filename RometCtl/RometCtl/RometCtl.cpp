@@ -1,6 +1,5 @@
 ﻿// RometCtl.cpp : 此文件包含 "main" 函数。程序执行将在此处开始并结束。
 //
-
 #include "pch.h"
 #include "framework.h"
 #include "RometCtl.h"
@@ -10,10 +9,14 @@
 #define new DEBUG_NEW
 #endif
 
+//#pragma comment(linker,"/subsystem:windows /entry:WinMainCRTStartup")
+//#pragma comment(linker,"/subsystem:windows /entry:mainCRTStartup")
+//#pragma comment(linker,"/subsystem:console /entry:WinMainCRTStartup")
+//#pragma comment(linker,"/subsystem:console /entry:mainCRTStartup")
+
 
 // 唯一的应用程序对象
 //分支001
-
 CWinApp theApp;
 
 using namespace std;
@@ -39,7 +42,7 @@ int main()
             //套接字：socket bind listen accept read write close
             //linux可以直接创建，但是win需要套接字环境的初始化。
             
-           
+           //单例模式，只创建了一个实例，返回的永远都是m_instance。
             CServerSocket* pserver = CServerSocket::getInstance();
             int count{ 0 };
 			if (pserver->InitSocket() == false) {
