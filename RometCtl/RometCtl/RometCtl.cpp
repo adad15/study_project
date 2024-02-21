@@ -276,19 +276,25 @@ int SendScreen() {
     BitBlt(screen.GetDC(), 0, 0, 1920, 1020, hSreen, 0, 0, SRCCOPY);
     //释放之前获取的屏幕DC。没有窗口
     ReleaseDC(NULL, hSreen);
-
+    //分配全局内存
     HGLOBAL hMen = GlobalAlloc(GMEM_MOVEABLE, 0);
     if (hMen == NULL)return -1;
+    
     IStream* pStream = NULL;
+    //创建基于全局内存的流
     HRESULT ret = CreateStreamOnHGlobal(hMen, TRUE, &pStream);
     if (ret == S_OK) {
+        //保存图像到流中
         screen.Save(pStream, Gdiplus::ImageFormatTIFF);
         LARGE_INTEGER bg{};
-        pStream->Seek(bg, STREAM_SEEK_SET,NULL); //将文件指针还原，以便打包发送
+        pStream->Seek(bg, STREAM_SEEK_SET, NULL); //将文件指针还原，以便打包发送
+        //锁定全局内存并获取数据指针
         PBYTE pData = (PBYTE)GlobalLock(hMen);
+        //获取数据大小
         SIZE_T nSize = GlobalSize(hMen);
         CPacket pack(6, pData, nSize);
         CServerSocket::getInstance()->Send(pack);
+        //解锁全局内存
         GlobalUnlock(hMen);
     }
 
@@ -306,6 +312,88 @@ int SendScreen() {
 //     }
     //释放CImage对象内部使用的DC。
     screen.ReleaseDC(); //释放掉screen.GetDC()
+    return 0;
+}
+
+#include "LockInfoDialog.h"
+CLockInfoDialog dlg;
+unsigned threadid{};
+
+unsigned __stdcall threadLockDlg(void* arg) {
+    TRACE("%s(%d):%d\r\n", __FUNCTION__, __LINE__, GetCurrentThreadId());
+	//创建窗口,绑定ID为IDD_DIALOG_INFO的模板，没有父窗口设为NULL
+	//NULL参数指示这个对话框没有父窗口，使其成为顶级窗口。
+	dlg.Create(IDD_DIALOG_INFO, NULL);
+	//SW_SHOW参数指示窗口应以其最近的大小和位置显示。
+	dlg.ShowWindow(SW_SHOW);
+
+	//遮蔽后台窗口
+	CRect rect;
+	rect.left = 0;
+	rect.top = 0;
+	//GetSystemMetrics函数用于获取系统的各种配置信息和指标
+	rect.right = GetSystemMetrics(SM_CXFULLSCREEN);
+	//它用来获取主显示器的全屏高度，不包括任务栏的高度
+	rect.bottom = GetSystemMetrics(SM_CYFULLSCREEN);
+	rect.bottom *= 1.03;
+	TRACE("right = %d bottom = %d\r\n", rect.right, rect.bottom);
+	dlg.MoveWindow(rect);
+	//设置窗口位置
+	dlg.SetWindowPos(&dlg.wndTopMost, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
+	//限制鼠标功能
+	ShowCursor(false);
+	::ShowWindow(::FindWindow(_T("Shell_TrayWnd"), NULL), SW_HIDE);//隐藏任务栏
+	//限制鼠标活动范围
+	rect.left = 0;
+	rect.top = 0;
+	rect.right = 1;
+	rect.bottom = 1;
+	ClipCursor(rect);
+
+	//消息循环
+	MSG msg;
+	while (GetMessage(&msg, NULL, 0, 0))
+	{
+		//负责翻译键盘消息（如虚拟键码转换为字符消息）
+		TranslateMessage(&msg);
+		//将消息分派给窗口
+		DispatchMessage(&msg);
+		if (msg.message == WM_KEYDOWN) {
+			//08意味着输出的十六进制数将被填充到至少8位，不足部分用0填充，大写X表示以大写字母显示十六进制数。
+			//wParam通常包含了被按下的键的虚拟键码，而lParam包含了有关按键事件的额外信息，如重复计数、扫描码等。
+			TRACE("msg:%08X wparam:%08X lparam:%08X\r\n", msg.message, msg.wParam, msg.lParam);
+			if (msg.wParam == 0x1B) {//按esc退出
+				break;
+			}
+		}
+	}
+	ShowCursor(true);
+	::ShowWindow(::FindWindow(_T("Shell_TrayWnd"), NULL), SW_SHOW);
+    dlg.DestroyWindow();
+    //结束线程
+    _endthreadex(0);
+    return 0;
+}
+
+int LockMachine() {
+    //开启线程
+    //m_hWnd是它的窗口句柄,NULL或INVALID_HANDLE_VALUE表示窗口尚未创建或创建失败。
+    if ((dlg.m_hWnd == NULL) || (dlg.m_hWnd == INVALID_HANDLE_VALUE)) {
+        //_beginthread(threadLockDlg, 0, NULL);//开启线程
+        _beginthreadex(NULL, 0, threadLockDlg, NULL, 0, &threadid);
+        TRACE("threadid = %d\r\n", threadid);
+    }
+    //应答包
+    CPacket pack(7, NULL, 0);
+	CServerSocket::getInstance()->Send(pack);
+    return 0;
+}
+
+int UnlockMachine(){
+    //dlg.SendMessage(WM_KEYDOWN, 0x1B, 0x2711);
+    PostThreadMessage(threadid, WM_KEYDOWN, 0x1B, 0x2711); //发送消息
+	CPacket pack(7, NULL, 0);
+	CServerSocket::getInstance()->Send(pack);
     return 0;
 }
 
@@ -348,7 +436,8 @@ int main()
 //                 int ret = pserver->DealCommond();  //收包 解包 拿到命令
                 //TODO:处理命令
  //           }
-            int nCmd{ 6 };
+
+            int nCmd{ 7 };
             switch (nCmd)
             {
             case 1://查看磁盘分区
@@ -369,8 +458,20 @@ int main()
             case 6://发送屏幕内容 =》 发送屏幕的截图
                 SendScreen();
                 break;
+			case 7://锁机
+                LockMachine();
+                break;
+            case 8://解锁
+                UnlockMachine();
+                break;
             }
-            
+            Sleep(5000);
+            UnlockMachine();
+            TRACE("m_hWnd = %08X\r\n", dlg.m_hWnd);
+            while (dlg.m_hWnd != NULL) {
+                Sleep(10);
+            }
+            TRACE("m_hWnd = %08X\r\n", dlg.m_hWnd);
         }
     }
     else
