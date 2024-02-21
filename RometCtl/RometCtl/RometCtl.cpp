@@ -5,6 +5,7 @@
 #include "RometCtl.h"
 #include "ServerSocket.h"
 #include <direct.h>
+#include <atlimage.h>
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -191,6 +192,7 @@ int MouseEvent() {
             nFlags = 8;
             break;
         }
+        // 设置（移动）系统鼠标光标到指定的屏幕坐标
         if (nFlags != 8)SetCursorPos(mouse.ptXY.x, mouse.ptXY.y);//设置鼠标位置
         switch (mouse.nAction)
         {
@@ -260,6 +262,53 @@ int MouseEvent() {
     return 0;
 }
 
+int SendScreen() {
+    //声明了一个CImage对象，它是一个用于处理图像的类，提供了一系列图像操作的方法，如加载、保存和创建图像等
+    CImage screen;//GDI,填句柄
+    //获取整个屏幕的设备上下文,如果此值为 NULL， 则 GetDC 将检索整个屏幕的 DC。
+    HDC hSreen = ::GetDC(NULL);
+    int nBitPerPixel = GetDeviceCaps(hSreen, BITSPIXEL);//位宽 24 ARGB 8888 32位
+    int nWidth = GetDeviceCaps(hSreen, HORZRES);//宽
+    int nHeight = GetDeviceCaps(hSreen, VERTRES);//高
+    //根据屏幕的宽度、高度和位深度创建一个图像。
+    screen.Create(nWidth, nHeight, nBitPerPixel);
+    //使用BitBlt函数将屏幕内容拷贝到CImage对象中。注意，这里硬编码了拷贝区域的大小为1920x1020，这可能不匹配所有屏幕尺寸。
+    BitBlt(screen.GetDC(), 0, 0, 1920, 1020, hSreen, 0, 0, SRCCOPY);
+    //释放之前获取的屏幕DC。没有窗口
+    ReleaseDC(NULL, hSreen);
+
+    HGLOBAL hMen = GlobalAlloc(GMEM_MOVEABLE, 0);
+    if (hMen == NULL)return -1;
+    IStream* pStream = NULL;
+    HRESULT ret = CreateStreamOnHGlobal(hMen, TRUE, &pStream);
+    if (ret == S_OK) {
+        screen.Save(pStream, Gdiplus::ImageFormatTIFF);
+        LARGE_INTEGER bg{};
+        pStream->Seek(bg, STREAM_SEEK_SET,NULL); //将文件指针还原，以便打包发送
+        PBYTE pData = (PBYTE)GlobalLock(hMen);
+        SIZE_T nSize = GlobalSize(hMen);
+        CPacket pack(6, pData, nSize);
+        CServerSocket::getInstance()->Send(pack);
+        GlobalUnlock(hMen);
+    }
+
+    //screen.Save(_T("test2024.tiff"), Gdiplus::ImageFormatTIFF);  //保存到文件
+
+//     for (int i{}; i < 10; i++) {
+//         //测量保存PNG和JPEG格式图像所需的时间
+//         DWORD tick = GetTickCount64();
+//         //分别保存图像为PNG和JPEG格式。
+//         screen.Save(_T("test2024.png"), Gdiplus::ImageFormatPNG);
+//         TRACE("png %d\r\n", GetTickCount64() - tick);
+//         tick = GetTickCount64();
+// 		screen.Save(_T("test2024.jpg"), Gdiplus::ImageFormatJPEG);
+// 		TRACE("ipg %d\r\n", GetTickCount64() - tick);
+//     }
+    //释放CImage对象内部使用的DC。
+    screen.ReleaseDC(); //释放掉screen.GetDC()
+    return 0;
+}
+
 int main()
 {
     int nRetCode = 0;
@@ -299,7 +348,7 @@ int main()
 //                 int ret = pserver->DealCommond();  //收包 解包 拿到命令
                 //TODO:处理命令
  //           }
-            int nCmd{ 1 };
+            int nCmd{ 6 };
             switch (nCmd)
             {
             case 1://查看磁盘分区
@@ -317,6 +366,9 @@ int main()
 			case 5://鼠标操作
 				MouseEvent();
 				break;
+            case 6://发送屏幕内容 =》 发送屏幕的截图
+                SendScreen();
+                break;
             }
             
         }
