@@ -3,6 +3,9 @@
 #include "framework.h"
 #define BUFFER_SIZE 4096
 
+#pragma pack(push)//保存字节对齐的状态
+#pragma pack(1)
+
 class CPacket {
 public:
 	CPacket() :sHead(0), nLength(0), sCmd(0), sSum(0) {}
@@ -13,6 +16,20 @@ public:
 		strData = pack.strData;
 		sSum = pack.sSum;
 	}
+	//打包数据
+	CPacket(WORD nCmd, const BYTE* pData, size_t nSize) {
+		sHead = 0xFEFE;
+		nLength = nSize + 4;
+		sCmd = nCmd;
+		strData.resize(nSize);
+		memcpy((void*)strData.c_str(), pData, nSize);
+		sSum = 0;
+		size_t a = strData.size();
+		for (size_t j{}; j < strData.size(); j++) {
+			sSum += BYTE(strData[j]) & 0xFF;
+		}
+	}
+	
 	//解析数据
 	CPacket(const BYTE* pData, size_t& nSize) {
 		//找包头
@@ -41,7 +58,7 @@ public:
 			sSum = *(WORD*)(pData + i); i += 2;
 			WORD sum{};
 			for (size_t j{}; j < strData.size(); j++) {
-				sum += BYTE(strData[i]) & 0xFF;
+				sum += BYTE(strData[j]) & 0xFF;
 			}
 			if (sum == sSum) {
 				nSize = i; //不要忘记包头前面可能残余数据,一起销毁掉。
@@ -62,13 +79,30 @@ public:
 		}
 		return *this;   //实现连等
 	}
+	int Size() {//包数据的大小
+		return nLength + 2 + 4;
+	}
+	const char* Data() {
+		strOut.resize(nLength + 6);
+		BYTE* pData = (BYTE*)strOut.c_str();
+		*(WORD*)pData = sHead; pData += 2;
+		*(DWORD*)pData = nLength; pData += 4;
+		*(WORD*)pData = sCmd; pData += 2;
+		memcpy(pData, strData.c_str(), strData.size()); pData += strData.size();
+		*(WORD*)pData = sSum;
+
+		return strOut.c_str();
+	}
 public:
 	WORD sHead;           //包头 0xFEFE
 	DWORD nLength;        //包长度（从控制命令开始，到和校验结束）
 	WORD sCmd;            //控制命令
 	std::string strData;  //包数据
 	WORD sSum;            //和校验，只检验包数据的长度
+	std::string strOut;   //整个包的数据
 };
+#pragma pack(pop)//还原字节对齐的状态
+
 
 class CServerSocket
 {
@@ -128,9 +162,14 @@ public:
 			}
 		}
 	}
+
 	bool Send(const char* pData, int nSize) {
 		if (m_client == -1) return false;
 		return send(m_client, pData, nSize, 0) > 0;
+	}
+	bool Send(CPacket& pack) { //不能常量引用，Data函数改变路pack的缓冲区
+		if (m_client == -1) return false;
+		return send(m_client, pack.Data(), pack.Size(), 0) > 0;
 	}
 
 private:
