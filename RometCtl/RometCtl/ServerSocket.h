@@ -171,6 +171,14 @@ public:
 		if (m_client == -1) return false;
 		return send(m_client, pack.Data(), pack.Size(), 0) > 0;
 	}
+	//将命令2解包后的类中的数据向外传递
+	bool GetFilePath(std::string& strPath) {
+		if (m_packet.sCmd == 2) {
+			strPath = m_packet.strData;
+			return true;
+		}
+		return false;
+	}
 
 private:
 	SOCKET m_sock;
@@ -230,6 +238,7 @@ private:
 	}
 
 	static CServerSocket* m_instance;
+	//用来实现单例的初始化和析构
 	class CHelper {
 	public:
 		CHelper() {
