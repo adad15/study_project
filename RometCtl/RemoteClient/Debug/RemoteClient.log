@@ -1,4 +1,5 @@
 ﻿  pch.cpp
+  ClientSockrt.cpp
   RemoteClient.cpp
   RemoteClientDlg.cpp
   正在生成代码...

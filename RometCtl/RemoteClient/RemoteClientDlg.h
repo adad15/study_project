@@ -3,7 +3,7 @@
 //
 
 #pragma once
-
+#include "ClientSockrt.h"
 
 // CRemoteClientDlg 对话框
 class CRemoteClientDlg : public CDialogEx
