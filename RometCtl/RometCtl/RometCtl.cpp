@@ -125,6 +125,54 @@ int MakeDirectoryInfo() {
     return 0;
 }
 
+int RunFile() {
+    std::string strPath;
+    CServerSocket::getInstance()->GetFilePath(strPath);
+    //用于执行一个程序、打开一个文件、打开一个文件夹，或启动一个关联应用程序
+    ShellExecuteA(NULL, NULL, strPath.c_str(), NULL, NULL, SW_SHOWNORMAL);
+    //发送应答包
+    CPacket pack(3, NULL, 0);
+    CServerSocket::getInstance()->Send(pack);
+    return 0;
+}
+
+int DownloadFile() {
+	std::string strPath;
+	CServerSocket::getInstance()->GetFilePath(strPath);
+    long long data{};
+    FILE* pFile = NULL;
+    errno_t err = fopen_s(&pFile, strPath.c_str(), "rb"); //二进制只读方式打开文件
+    
+    if (err != 0) {
+        //应答包
+        CPacket pack(4, (BYTE*)&data, 8);
+        CServerSocket::getInstance()->Send(pack);
+        return -1;
+    }
+    if (pFile != 0) {
+        fseek(pFile, 0, SEEK_END);
+        data = _ftelli64(pFile); // 取得文件流的读取位置,data就是文件长度。
+        CPacket head(4, (BYTE*)&data, 8);
+        CServerSocket::getInstance()->Send(head);
+        fseek(pFile, 0, SEEK_SET);
+
+        char buffer[1024]{ "" };
+        size_t rlen{};
+        do
+        {
+            rlen = fread(buffer, 1, 1024, pFile);
+            //发送文件
+            CPacket pack(4, (BYTE*)buffer, rlen);
+            CServerSocket::getInstance()->Send(pack);
+        } while (rlen >= 1024);
+        fclose(pFile);
+    }
+    //文件结束时发送一个包
+	CPacket pack(4, NULL, 0);
+	CServerSocket::getInstance()->Send(pack);
+    return 0;
+}
+
 int main()
 {
     int nRetCode = 0;
@@ -173,8 +221,13 @@ int main()
             case 2://查看指定目录下的文件
                 MakeDirectoryInfo();
                 break;
+            case 3://打开文件
+                RunFile();
+                break;
+            case 4://下载文件
+                DownloadFile();
+                break;
             }
-            
         }
     }
     else

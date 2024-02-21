@@ -21,8 +21,14 @@ public:
 		sHead = 0xFEFE;
 		nLength = nSize + 4;
 		sCmd = nCmd;
-		strData.resize(nSize);
-		memcpy((void*)strData.c_str(), pData, nSize);
+		if (nSize > 0) {
+			strData.resize(nSize);
+			memcpy((void*)strData.c_str(), pData, nSize);
+		}
+		else {
+			strData.clear();
+		}
+		
 		sSum = 0;
 		size_t a = strData.size();
 		for (size_t j{}; j < strData.size(); j++) {
@@ -173,7 +179,7 @@ public:
 	}
 	//将命令2解包后的类中的数据向外传递
 	bool GetFilePath(std::string& strPath) {
-		if (m_packet.sCmd == 2) {
+		if ((m_packet.sCmd >= 2) && (m_packet.sCmd <= 4)) {
 			strPath = m_packet.strData;
 			return true;
 		}
