@@ -1,5 +1,4 @@
 ﻿  RometCtl.cpp
   ServerSocket.cpp
   正在生成代码...
-D:\vs2022 code\RometClt\study_project\RometCtl\RometCtl\RometCtl.cpp(171): warning C4715: “DownloadFile”: 不是所有的控件路径都返回值
   RometCtl.vcxproj -> D:\vs2022 code\RometClt\study_project\RometCtl\Debug\RometCtl.exe
