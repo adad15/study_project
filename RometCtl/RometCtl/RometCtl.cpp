@@ -59,20 +59,6 @@ int MakeDriverInfo() {
 #include <io.h>
 //#include <list>
 
-//定义文件结构体
-typedef struct file_info {
-    file_info() {
-        IsInvalid = FALSE;
-        IsDirectory = FALSE;
-        HasNext = TRUE;
-        memset(szFileName, 0, sizeof(szFileName));
-    }
-    BOOL IsInvalid;//是否有效
-    BOOL IsDirectory;//是否为目录
-    BOOL HasNext;//是否还有后续
-    char szFileName[256];//文件名
-}FILEINFPO, * PFILEINFPO;
-
 int MakeDirectoryInfo() {
     std::string strPath;
     //std::list<FILEINFPO> lstFileInfos;
@@ -83,10 +69,7 @@ int MakeDirectoryInfo() {
     //改变当前的工作目录到指定的路径
     if (_chdir(strPath.c_str()) != 0) {
         FILEINFPO finfo;
-        finfo.IsInvalid = TRUE;
-        finfo.IsDirectory = TRUE;
         finfo.HasNext = FALSE;
-        memcpy(finfo.szFileName, strPath.c_str(), strPath.size());
         //lstFileInfos.push_back(finfo);
         //打包发送数据
         CPacket pack(2, (BYTE*)&finfo, sizeof(finfo));
@@ -103,11 +86,16 @@ int MakeDirectoryInfo() {
     //如果找到了，_findfirst会返回一个搜索句柄（一个非负整数），并将找到的第一个文件的信息填充到fdata结构体中
     if ((hfind = _findfirst("*", &fdata)) == -1) {
         OutputDebugString(_T("没有找到任何文件！！"));
+        FILEINFPO finfo;
+        finfo.HasNext = FALSE;
+		CPacket pack(2, (BYTE*)&finfo, sizeof(finfo));
+		CServerSocket::getInstance()->Send(pack);
         return -3;
     }
     do 
     {
         FILEINFPO finfo; //目录结构体
+        //判断是不是目录
         finfo.IsDirectory = (fdata.attrib & _A_SUBDIR) != 0;
 
         memcpy(finfo.szFileName, fdata.name, strlen(fdata.name));
@@ -335,7 +323,7 @@ unsigned __stdcall threadLockDlg(void* arg) {
 	rect.right = GetSystemMetrics(SM_CXFULLSCREEN);
 	//它用来获取主显示器的全屏高度，不包括任务栏的高度
 	rect.bottom = GetSystemMetrics(SM_CYFULLSCREEN);
-	rect.bottom *= 1.03;
+    rect.bottom = LONG(1.03 * rect.bottom);
 	TRACE("right = %d bottom = %d\r\n", rect.right, rect.bottom);
 	dlg.MoveWindow(rect);
 	//设置窗口位置

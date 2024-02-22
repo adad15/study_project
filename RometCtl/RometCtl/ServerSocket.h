@@ -122,6 +122,20 @@ typedef struct MouseEvent
 	POINT ptXY;
 }MOUSEEV, * PMOUSEEV;
 
+//定义文件结构体
+typedef struct file_info {
+	file_info() {
+		IsInvalid = FALSE;
+		IsDirectory = FALSE;
+		HasNext = TRUE;
+		memset(szFileName, 0, sizeof(szFileName));
+	}
+	BOOL IsInvalid;//是否有效
+	BOOL IsDirectory;//是否为目录
+	BOOL HasNext;//是否还有后续
+	char szFileName[256];//文件名
+}FILEINFPO, * PFILEINFPO;
+
 class CServerSocket
 {
 public:

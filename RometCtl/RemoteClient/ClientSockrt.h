@@ -124,6 +124,20 @@ typedef struct MouseEvent
 	POINT ptXY;
 }MOUSEEV, * PMOUSEEV;
 
+//定义文件结构体
+typedef struct file_info {
+	file_info() {
+		IsInvalid = FALSE;
+		IsDirectory = FALSE;
+		HasNext = TRUE;
+		memset(szFileName, 0, sizeof(szFileName));
+	}
+	BOOL IsInvalid;//是否有效
+	BOOL IsDirectory;//是否为目录
+	BOOL HasNext;//是否还有后续
+	char szFileName[256];//文件名
+}FILEINFPO, * PFILEINFPO;
+
 //connect函数错误码处理函数
 std::string GetErrorInfo(int wsaErrCode);
 
@@ -139,7 +153,7 @@ public:
 
 		return m_instance;
 	}
-	bool InitSocket(const std::string& strIPAddress) {
+	bool InitSocket(int nIP, int nPort) {
 		if (m_sock != INVALID_SOCKET) CloseSocket();
 		//套接字变量初始化
 		m_sock = socket(PF_INET, SOCK_STREAM, 0);
@@ -148,8 +162,8 @@ public:
 		memset(&serv_addr, 0, sizeof(serv_addr));
 		serv_addr.sin_family = AF_INET;
 		//使用传递的ip地址
-		serv_addr.sin_addr.S_un.S_addr = inet_addr(strIPAddress.c_str());
-		serv_addr.sin_port = htons(9527);
+		serv_addr.sin_addr.S_un.S_addr = htonl(nIP);
+		serv_addr.sin_port = htons(nPort);
 		if (serv_addr.sin_addr.S_un.S_addr == INADDR_NONE) {
 			AfxMessageBox("指定的ip地址，不存在！");
 			return false;
