@@ -1,5 +1,7 @@
 ﻿  RometCtl.cpp
 D:\vs2022 code\RometClt\study_project\RometCtl\RometCtl\RometCtl.cpp(338,17): warning C4244: “*=”: 从“double”转换到“LONG”，可能丢失数据
+  ServerSocket.cpp
   (编译源文件“/RometCtl.cpp”)
   
+  正在生成代码...
   RometCtl.vcxproj -> D:\vs2022 code\RometClt\study_project\RometCtl\Debug\RometCtl.exe

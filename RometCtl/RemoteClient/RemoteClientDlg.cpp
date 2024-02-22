@@ -65,6 +65,7 @@ BEGIN_MESSAGE_MAP(CRemoteClientDlg, CDialogEx)
 	ON_WM_SYSCOMMAND()
 	ON_WM_PAINT()
 	ON_WM_QUERYDRAGICON()
+	ON_BN_CLICKED(IDC_BTN_TEST, &CRemoteClientDlg::OnBnClickedBtnTest)
 END_MESSAGE_MAP()
 
 
@@ -153,3 +154,25 @@ HCURSOR CRemoteClientDlg::OnQueryDragIcon()
 	return static_cast<HCURSOR>(m_hIcon);
 }
 
+
+
+void CRemoteClientDlg::OnBnClickedBtnTest()
+{
+	// 获取套接字的实例
+	CClientSockrt* pClient = CClientSockrt::getInstance();
+	bool ret = pClient->InitSocket("127.0.0.1");
+	if (!ret) {
+		AfxMessageBox("网络初始化失败！");
+		return;
+	}
+	//发送封装好的数据包
+	CPacket pack(1981, NULL, 0);
+	ret = pClient->Send(pack);
+	TRACE("Send ret %d\r\n", ret);
+
+	//接受服务端发送的应答包，并解包
+	int cmd = pClient->DealCommond();
+	TRACE("ack:%d\r\n", pClient->GetPacket().sCmd);
+	TRACE("ack:%d\r\n", cmd);
+	pClient->CloseSocket();
+}

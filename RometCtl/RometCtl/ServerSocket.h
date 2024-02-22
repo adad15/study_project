@@ -50,29 +50,29 @@ public:
 				nSize = 0;
 				return;
 			}
-			nLength = *(DWORD*)(pData + i); i += 4; //i向后移动4字节，除去长度数据
-			if (nLength + i > nSize) { //包未完全接收到，就返回解析失败
-				nSize = 0;
-				return;
-			}
-			sCmd = *(WORD*)(pData + i); i += 2; //i向后移动2字节，除去命令长度
-			if (nLength > 4) {
-				strData.resize(nLength - 2 - 2); //调整字符串的长度
-				memcpy((void*)strData.c_str(), pData + i, nLength - 4); //复制字符串
-				i += nLength - 4;
-			}
-			sSum = *(WORD*)(pData + i); i += 2;
-			WORD sum{};
-			for (size_t j{}; j < strData.size(); j++) {
-				sum += BYTE(strData[j]) & 0xFF;
-			}
-			if (sum == sSum) {
-				nSize = i; //不要忘记包头前面可能残余数据,一起销毁掉。
-				//nSize = nLength + 2 + 4; //包头部分+长度部分
-				return;
-			}
-			nSize = 0;
 		}
+		nLength = *(DWORD*)(pData + i); i += 4; //i向后移动4字节，除去长度数据
+		if (nLength + i > nSize) { //包未完全接收到，就返回解析失败
+			nSize = 0;
+			return;
+		}
+		sCmd = *(WORD*)(pData + i); i += 2; //i向后移动2字节，除去命令长度
+		if (nLength > 4) {
+			strData.resize(nLength - 2 - 2); //调整字符串的长度
+			memcpy((void*)strData.c_str(), pData + i, nLength - 4); //复制字符串
+			i += nLength - 4;
+		}
+		sSum = *(WORD*)(pData + i); i += 2;
+		WORD sum{};
+		for (size_t j{}; j < strData.size(); j++) {
+			sum += BYTE(strData[j]) & 0xFF;
+		}
+		if (sum == sSum) {
+			nSize = i; //不要忘记包头前面可能残余数据,一起销毁掉。
+			//nSize = nLength + 2 + 4; //包头部分+长度部分
+			return;
+		}
+		nSize = 0;
 	}
 	~CPacket() {}
 	CPacket& operator=(const CPacket& pack) {
@@ -149,24 +149,32 @@ public:
 		return true;
 	}
 	bool AcceptClient() {
+		TRACE("enter AcceptClient\r\n");
 		sockaddr_in client_addr;
 		int cli_sz = sizeof(client_addr);
 		m_client = accept(m_sock, (sockaddr*)&client_addr, &cli_sz);
+		TRACE("m_client = %d\r\n", m_client);
 		if (m_client == -1) return false;
 		//closesocket(m_client);
 		return true;
 	}
 	int DealCommond(){
-		if (m_client == -1) return false;
+		if (m_client == -1) return -1;
 		char* buffer = new char[BUFFER_SIZE];
+		if (buffer == NULL) {
+			TRACE("内存不足！\r\n");
+			return -2;
+		}
 		memset(buffer, 0, BUFFER_SIZE);
 		size_t index{};  
 		while (true)
 		{
 			size_t len = recv(m_client, buffer + index, BUFFER_SIZE - index, 0);
 			if (len <= 0) {
+				delete[] buffer;
 				return -1;
 			}
+			TRACE("recv %d\r\n", len);
 			index += len;
 			len = index;
 			//调用重载等号运算符，创建匿名对象
@@ -176,9 +184,15 @@ public:
 				//读取完第一个数据包后，清楚这个数据包前面的内容，把后面的数据像前提。
 				memmove(buffer, buffer + len, BUFFER_SIZE - len);
 				index -= len;
+				delete[] buffer;
 				return m_packet.sCmd;
 			}
 		}
+		delete[] buffer;
+		return -1;
+	}
+	CPacket& GetPacket() {
+		return m_packet;
 	}
 
 	bool Send(const char* pData, int nSize) {
@@ -204,7 +218,10 @@ public:
 		}
 		return false;
 	}
-
+	void CloseClient() {
+		closesocket(m_client);
+		m_client = INVALID_SOCKET;
+	}
 private:
 	SOCKET m_sock;
 	SOCKET m_client;

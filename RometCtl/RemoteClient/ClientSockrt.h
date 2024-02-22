@@ -2,6 +2,7 @@
 #include "pch.h"
 #include "framework.h"
 #include <string>
+#include <vector>
 #define BUFFER_SIZE 4096
 
 #pragma pack(push)//保存字节对齐的状态
@@ -51,29 +52,29 @@ public:
 				nSize = 0;
 				return;
 			}
-			nLength = *(DWORD*)(pData + i); i += 4; //i向后移动4字节，除去长度数据
-			if (nLength + i > nSize) { //包未完全接收到，就返回解析失败
-				nSize = 0;
-				return;
-			}
-			sCmd = *(WORD*)(pData + i); i += 2; //i向后移动2字节，除去命令长度
-			if (nLength > 4) {
-				strData.resize(nLength - 2 - 2); //调整字符串的长度
-				memcpy((void*)strData.c_str(), pData + i, nLength - 4); //复制字符串
-				i += nLength - 4;
-			}
-			sSum = *(WORD*)(pData + i); i += 2;
-			WORD sum{};
-			for (size_t j{}; j < strData.size(); j++) {
-				sum += BYTE(strData[j]) & 0xFF;
-			}
-			if (sum == sSum) {
-				nSize = i; //不要忘记包头前面可能残余数据,一起销毁掉。
-				//nSize = nLength + 2 + 4; //包头部分+长度部分
-				return;
-			}
-			nSize = 0;
 		}
+		nLength = *(DWORD*)(pData + i); i += 4; //i向后移动4字节，除去长度数据
+		if (nLength + i > nSize) { //包未完全接收到，就返回解析失败
+			nSize = 0;
+			return;
+		}
+		sCmd = *(WORD*)(pData + i); i += 2; //i向后移动2字节，除去命令长度
+		if (nLength > 4) {
+			strData.resize(nLength - 2 - 2); //调整字符串的长度
+			memcpy((void*)strData.c_str(), pData + i, nLength - 4); //复制字符串
+			i += nLength - 4;
+		}
+		sSum = *(WORD*)(pData + i); i += 2;
+		WORD sum{};
+		for (size_t j{}; j < strData.size(); j++) {
+			sum += BYTE(strData[j]) & 0xFF;
+		}
+		if (sum == sSum) {
+			nSize = i; //不要忘记包头前面可能残余数据,一起销毁掉。
+			//nSize = nLength + 2 + 4; //包头部分+长度部分
+			return;
+		}
+		nSize = 0;
 	}
 	~CPacket() {}
 	CPacket& operator=(const CPacket& pack) {
@@ -124,21 +125,7 @@ typedef struct MouseEvent
 }MOUSEEV, * PMOUSEEV;
 
 //connect函数错误码处理函数
-std::string GetErrorInfo(int wsaErrCode) {
-	std::string ret;
-	LPVOID lpMsgBuf = NULL;
-	//把错误码进行格式化
-	FormatMessage(
-		FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER,
-		NULL,
-		wsaErrCode,
-		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-		(LPSTR)&lpMsgBuf, 0, NULL
-	);
-	ret = (char*)lpMsgBuf;
-	LocalFree(lpMsgBuf);
-	return ret;
-}
+std::string GetErrorInfo(int wsaErrCode);
 
 class CClientSockrt
 {
@@ -153,6 +140,9 @@ public:
 		return m_instance;
 	}
 	bool InitSocket(const std::string& strIPAddress) {
+		if (m_sock != INVALID_SOCKET) CloseSocket();
+		//套接字变量初始化
+		m_sock = socket(PF_INET, SOCK_STREAM, 0);
 		if (m_sock == -1) return false;
 		sockaddr_in serv_addr;
 		memset(&serv_addr, 0, sizeof(serv_addr));
@@ -177,8 +167,8 @@ public:
 	}
 	
 	int DealCommond() {
-		if (m_sock == -1) return false;
-		char* buffer = new char[BUFFER_SIZE];
+		if (m_sock == -1) return -1;
+		char* buffer = m_buffer.data();
 		memset(buffer, 0, BUFFER_SIZE);
 		size_t index{};
 		while (true)
@@ -197,8 +187,13 @@ public:
 				memmove(buffer, buffer + len, BUFFER_SIZE - len);
 				index -= len;
 				return m_packet.sCmd;
+				TRACE("DealCommond m_packet.sCmd %d", m_packet.sCmd);
 			}
 		}
+		return -1;
+	}
+	CPacket& GetPacket() {
+		return m_packet;
 	}
 
 	bool Send(const char* pData, int nSize) {
@@ -206,6 +201,7 @@ public:
 		return send(m_sock, pData, nSize, 0) > 0;
 	}
 	bool Send(CPacket& pack) { //不能常量引用，Data函数改变路pack的缓冲区
+		TRACE("m_sock = %d\r\n", m_sock);
 		if (m_sock == -1) return false;
 		return send(m_sock, pack.Data(), pack.Size(), 0) > 0;
 	}
@@ -224,8 +220,13 @@ public:
 		}
 		return false;
 	}
+	void CloseSocket() {
+		closesocket(m_sock);
+		m_sock = INVALID_SOCKET;
+	}
 
 private:
+	std::vector<char> m_buffer;
 	SOCKET m_sock;
 	CPacket m_packet;  //在CPacket类中必须要有复制构造函数
 	CClientSockrt& operator=(const CClientSockrt& ss) {}
@@ -238,8 +239,9 @@ private:
 			MessageBox(NULL, _T("无法初始化套接字环境，请检查网络设置！"), _T("初始化错误！"), MB_OK | MB_ICONERROR);
 			exit(0);
 		}
-		//套接字变量初始化
-		m_sock = socket(PF_INET, SOCK_STREAM, 0);
+
+		//缓冲区初始化
+		m_buffer.resize(BUFFER_SIZE);
 	}
 	~CClientSockrt() {
 		closesocket(m_sock);
@@ -290,4 +292,3 @@ private:
 	};
 	static CHelper m_helper;
 };
-
