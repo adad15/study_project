@@ -1,10 +1,12 @@
 #pragma once
 #include "pch.h"
 #include "framework.h"
-#define BUFFER_SIZE 4096
+#define BUFFER_SIZE 40960
 
 #pragma pack(push)//保存字节对齐的状态
 #pragma pack(1)
+
+void Dump(BYTE* pData, size_t nSize);
 
 class CPacket {
 public:
@@ -215,6 +217,7 @@ public:
 	}
 	bool Send(CPacket& pack) { //不能常量引用，Data函数改变路pack的缓冲区
 		if (m_client == -1) return false;
+		Dump((BYTE*)pack.Data(), pack.Size());
 		return send(m_client, pack.Data(), pack.Size(), 0) > 0;
 	}
 	//将命令2解包后的类中的数据向外传递

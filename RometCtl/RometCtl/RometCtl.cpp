@@ -92,8 +92,10 @@ int MakeDirectoryInfo() {
 		CServerSocket::getInstance()->Send(pack);
         return -3;
     }
+    int i{};
     do 
     {
+        i++;
         FILEINFPO finfo; //目录结构体
         //判断是不是目录
         finfo.IsDirectory = (fdata.attrib & _A_SUBDIR) != 0;
@@ -102,7 +104,9 @@ int MakeDirectoryInfo() {
 		//lstFileInfos.push_back(finfo);
 		//打包发送数据
 		CPacket pack(2, (BYTE*)&finfo, sizeof(finfo));
-		CServerSocket::getInstance()->Send(pack);
+		bool issendwell = CServerSocket::getInstance()->Send(pack);
+        TRACE("server number is %d filename is %s issendwell %d\r\n", i, finfo.szFileName, issendwell);
+        //Dump((BYTE*)pack.Data(), pack.Size());
     } while (!_findnext(hfind,&fdata));
     //_findnext函数使用之前由_findfirst获取的搜索句柄hfind，并尝试找到下一个文件。
     // 如果找到了，_findnext返回0并更新fdata结构体为新找到的文件的信息。

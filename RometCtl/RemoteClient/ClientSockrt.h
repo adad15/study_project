@@ -3,10 +3,12 @@
 #include "framework.h"
 #include <string>
 #include <vector>
-#define BUFFER_SIZE 4096
+#define BUFFER_SIZE 40960
 
 #pragma pack(push)//保存字节对齐的状态
 #pragma pack(1)
+
+void Dump(BYTE* pData, size_t nSize);
 
 class CPacket {
 public:
@@ -179,16 +181,18 @@ public:
 		}
 		return true;
 	}
-	
+	size_t index{};
 	int DealCommond() {
 		if (m_sock == -1) return -1;
 		char* buffer = m_buffer.data();
-		memset(buffer, 0, BUFFER_SIZE);
-		size_t index{};
+		//memset(buffer, 0, BUFFER_SIZE);
+		//size_t index{};
 		while (true)
 		{
+			//通常情况下，如果 send 或者 recv 函数返回 0，我们就认为对端关闭了连接，
+			// 我们这端也关闭连接即可，这是实际开发时最常见的处理逻辑。
 			size_t len = recv(m_sock, buffer + index, BUFFER_SIZE - index, 0);
-			if (len <= 0) {
+			if (len < 0) {
 				return -1;
 			}
 			index += len;

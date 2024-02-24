@@ -64,6 +64,7 @@ void CRemoteClientDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_IPAddress(pDX, IDC_IPADDRESS_SERV, m_server_address);
 	DDX_Text(pDX, IDC_EDIT_PORT, m_nPos);
 	DDX_Control(pDX, IDC_TREE_DIR, m_Tree);
+	DDX_Control(pDX, IDC_LIST_FILE, m_List);
 }
 
 //封装一个网络连接函数
@@ -100,6 +101,8 @@ BEGIN_MESSAGE_MAP(CRemoteClientDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_BTN_TEST, &CRemoteClientDlg::OnBnClickedBtnTest)
 	ON_BN_CLICKED(IDC_BTN_FILEINFO, &CRemoteClientDlg::OnBnClickedBtnFileinfo)
 	ON_NOTIFY(NM_DBLCLK, IDC_TREE_DIR, &CRemoteClientDlg::OnNMDblclkTreeDir)
+	ON_NOTIFY(NM_CLICK, IDC_TREE_DIR, &CRemoteClientDlg::OnNMClickTreeDir)
+	ON_NOTIFY(NM_RCLICK, IDC_LIST_FILE, &CRemoteClientDlg::OnNMRClickListFile)
 END_MESSAGE_MAP()
 
 
@@ -276,10 +279,8 @@ void CRemoteClientDlg::DeleteTreeChildItem(HTREEITEM hTree)
 }
 
 
-void CRemoteClientDlg::OnNMDblclkTreeDir(NMHDR* pNMHDR, LRESULT* pResult)
+void CRemoteClientDlg::LoadFileInfo()
 {
-	// TODO: 在此添加控件通知处理程序代码
-	*pResult = 0;
 	CPoint ptMouse;
 	//拿到当前指针的位置，全局坐标系
 	GetCursorPos(&ptMouse);
@@ -296,6 +297,8 @@ void CRemoteClientDlg::OnNMDblclkTreeDir(NMHDR* pNMHDR, LRESULT* pResult)
 
 	//防止多次双击造成的无限扩张
 	DeleteTreeChildItem(hTreeSelected);
+
+	m_List.DeleteAllItems();
 
 	CString strPath = GetPath(hTreeSelected);
 	int nCmd = SendCommandPacket(2, false, (BYTE*)(LPCSTR)strPath, strPath.GetLength());
@@ -314,17 +317,59 @@ void CRemoteClientDlg::OnNMDblclkTreeDir(NMHDR* pNMHDR, LRESULT* pResult)
 				pInfp = (PFILEINFPO)CClientSockrt::getInstance()->GetPacket().strData.c_str();
 				continue;
 			}
-		}
-		HTREEITEM hTemp = m_Tree.InsertItem(pInfp->szFileName, hTreeSelected, TVI_LAST);
-		//如果是目录，在节点的后面加上一个空的节点
-		if (pInfp->IsDirectory) {
+			HTREEITEM hTemp = m_Tree.InsertItem(pInfp->szFileName, hTreeSelected, TVI_LAST);
+			//如果是目录，在节点的后面加上一个空的节点
 			m_Tree.InsertItem("", hTemp, TVI_LAST);
 		}
+		else {
+			m_List.InsertItem(0, pInfp->szFileName); //0是序号位置
+		}
+		
 		int cmd = pClient->DealCommond();   //不断接受路径包
 		TRACE("ack:%d\r\n", cmd);
 		if (cmd < 0) break;
 		pInfp = (PFILEINFPO)CClientSockrt::getInstance()->GetPacket().strData.c_str();
-	} 
+	}
 
 	pClient->CloseSocket();
+}
+
+void CRemoteClientDlg::OnNMDblclkTreeDir(NMHDR* pNMHDR, LRESULT* pResult)
+{
+	// TODO: 在此添加控件通知处理程序代码
+	*pResult = 0;
+	LoadFileInfo();
+}
+
+
+void CRemoteClientDlg::OnNMClickTreeDir(NMHDR* pNMHDR, LRESULT* pResult)
+{
+	// TODO: 在此添加控件通知处理程序代码
+	*pResult = 0;
+	LoadFileInfo();
+}
+
+
+void CRemoteClientDlg::OnNMRClickListFile(NMHDR* pNMHDR, LRESULT* pResult)
+{
+	LPNMITEMACTIVATE pNMItemActivate = reinterpret_cast<LPNMITEMACTIVATE>(pNMHDR);
+	// TODO: 在此添加控件通知处理程序代码
+	*pResult = 0;
+
+	CPoint ptMouse, ptList;
+	//拿到全局坐标
+	GetCursorPos(&ptMouse);
+	ptList = ptMouse;
+	//转成屏幕坐标
+	m_List.ScreenToClient(&ptList);
+	int ListSelected = m_List.HitTest(ptList);
+	if (ListSelected < 0) return;
+	CMenu menu; //创建一个菜单,此时只有一个子菜单
+	menu.LoadMenu(IDR_MENU_RCLICK);
+	//取第一个子菜单
+	CMenu* pPupup = menu.GetSubMenu(0);
+	if (pPupup != NULL) {
+		//弹出菜单
+		pPupup->TrackPopupMenu(TPM_LEFTALIGN | TPM_RIGHTBUTTON, ptMouse.x, ptMouse.y, this);
+	}
 }
