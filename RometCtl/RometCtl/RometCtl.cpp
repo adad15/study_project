@@ -136,6 +136,7 @@ int DownloadFile() {
     FILE* pFile = NULL;
     errno_t err = fopen_s(&pFile, strPath.c_str(), "rb"); //二进制只读方式打开文件
     
+    //文件打开失败！！！
     if (err != 0) {
         //应答包
         CPacket pack(4, (BYTE*)&data, 8);
@@ -389,6 +390,31 @@ int UnlockMachine(){
     return 0;
 }
 
+int DeleteLockFile() {
+    
+    std::string strPath;
+    //将客户端发送的文件地址信息赋值给strPath
+    CServerSocket::getInstance()->GetFilePath(strPath);
+    //方法一：乱码
+    //LPCWSTR spath = (LPCWSTR)strPath.c_str();
+
+    //方法二：英文可以，中文乱码
+    //TCHAR sPath[MAX_PATH] = _T("");
+    //mbstowcs(sPath, strPath.c_str(), strPath.size());
+
+    //方法三：
+    TCHAR sPath[MAX_PATH] = _T("");
+    MultiByteToWideChar(CP_ACP, 0, strPath.c_str(), strPath.size(), 
+        sPath, sizeof(sPath) / sizeof(TCHAR));
+
+    DeleteFile(sPath);
+
+    CPacket pack(9, NULL, 0);
+    bool ret = CServerSocket::getInstance()->Send(pack);
+    TRACE("send ret = %d\r\n", ret);
+    return 0;
+}
+
 int TestConnect() {
     CPacket pack(1981, NULL, 0);
 	bool ret = CServerSocket::getInstance()->Send(pack);
@@ -424,6 +450,9 @@ int ExcuteCommand(int nCmd) {
 	case 8://解锁
         ret = UnlockMachine();
 		break;
+    case 9://删除文件
+        ret = DeleteLockFile();
+        break;
 	case 1981:
 		ret = TestConnect();
 		break;

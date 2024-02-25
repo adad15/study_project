@@ -22,6 +22,7 @@ public:
 
 private:
 	void LoadFileInfo();
+	void LoadFileCurrent();
 	CString GetPath(HTREEITEM hTree);
 	void DeleteTreeChildItem(HTREEITEM hTree);
 	//1 查看磁盘分区
@@ -32,6 +33,7 @@ private:
 	//6 发送屏幕内容
 	//7 锁机
 	//8 解锁
+	//9 删除文件
 	//返回值，是命令号，如果小于零则是错误
 	int SendCommandPacket(int nCmd, bool bAutoClose = true, BYTE* pData = NULL, size_t nLength = 0);
 // 实现
@@ -55,4 +57,7 @@ public:
 	// 显示文件
 	CListCtrl m_List;
 	afx_msg void OnNMRClickListFile(NMHDR* pNMHDR, LRESULT* pResult);
+	afx_msg void OnDownloadFile();
+	afx_msg void OnDeleteFile();
+	afx_msg void OnRunFile();
 };
