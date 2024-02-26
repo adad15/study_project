@@ -1,7 +1,7 @@
 #pragma once
 #include "pch.h"
 #include "framework.h"
-#define BUFFER_SIZE 40960
+#define BUFFER_SIZE 409600
 
 #pragma pack(push)//保存字节对齐的状态
 #pragma pack(1)

@@ -29,6 +29,9 @@ public:
 	CImage& GetImage() {
 		return m_image;
 	}
+	void SetImageStatus(bool isFull = false) {
+		m_isFull = isFull;
+	}
 private:
 	CImage m_image; //缓存
 	bool m_isFull;  //true表示有缓存数据
@@ -85,5 +88,5 @@ public:
 	//写消息函数
 	afx_msg LRESULT OnSendPacket(WPARAM wParam, LPARAM lParam);
 	afx_msg void OnBnClickedBtnStartWatch();
-	afx_msg void OnTimer(UINT_PTR nIDEvent);
+	//afx_msg void OnTimer(UINT_PTR nIDEvent);
 };
