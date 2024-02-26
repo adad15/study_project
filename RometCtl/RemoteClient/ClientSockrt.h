@@ -3,7 +3,7 @@
 #include "framework.h"
 #include <string>
 #include <vector>
-#define BUFFER_SIZE 859600
+#define BUFFER_SIZE 2048000
 
 #pragma pack(push)//保存字节对齐的状态
 #pragma pack(1)
