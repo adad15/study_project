@@ -181,28 +181,28 @@ public:
 		}
 		return true;
 	}
-	size_t index{};
+	
 	int DealCommond() {
 		if (m_sock == -1) return -1;
 		char* buffer = m_buffer.data();
 		//memset(buffer, 0, BUFFER_SIZE);
-		//size_t index{};
+		static size_t index{};
 		while (true)
 		{
 			//通常情况下，如果 send 或者 recv 函数返回 0，我们就认为对端关闭了连接，
 			// 我们这端也关闭连接即可，这是实际开发时最常见的处理逻辑。
 			size_t len = recv(m_sock, buffer + index, BUFFER_SIZE - index, 0);
-			if (len < 0) {
+			if ((len <= 0) && index <= 0) {
 				return -1;
 			}
-			index += len;
+			index += len; //index 表示数组数据中的总长度
 			len = index;
 			//调用重载等号运算符，创建匿名对象
 			//如果有多个包合在一起，调用这个构造函数len的值会变，第一个包头前的废数据+第一个数据包长度
 			m_packet = CPacket((BYTE*)buffer, len);
 			if (len > 0) {
 				//读取完第一个数据包后，清楚这个数据包前面的内容，把后面的数据像前提。
-				memmove(buffer, buffer + len, BUFFER_SIZE - len);
+				memmove(buffer, buffer + len, index - len);
 				index -= len;
 				return m_packet.sCmd;
 				TRACE("DealCommond m_packet.sCmd %d", m_packet.sCmd);

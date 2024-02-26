@@ -106,6 +106,7 @@ BEGIN_MESSAGE_MAP(CRemoteClientDlg, CDialogEx)
 	ON_COMMAND(ID_DOWNLOAD_FILE, &CRemoteClientDlg::OnDownloadFile)
 	ON_COMMAND(ID_DELETE_FILE, &CRemoteClientDlg::OnDeleteFile)
 	ON_COMMAND(ID_RUN_FILE, &CRemoteClientDlg::OnRunFile)
+	ON_MESSAGE(WM_SEND_PACKET, &CRemoteClientDlg::OnSendPacket)
 END_MESSAGE_MAP()
 
 
@@ -146,6 +147,10 @@ BOOL CRemoteClientDlg::OnInitDialog()
 	m_nPos = _T("9527");
 	UpdateData(FALSE);
 
+	//创建子窗口，并设置为隐藏
+	m_dlgStatus.Create(IDD_DLG_STATUS, this);
+	m_dlgStatus.ShowWindow(SW_HIDE);
+	m_isFull = false;
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
 
@@ -282,6 +287,122 @@ void CRemoteClientDlg::DeleteTreeChildItem(HTREEITEM hTree)
 }
 
 
+void CRemoteClientDlg::threadEntryForDownFile(void* arg)
+{
+	CRemoteClientDlg* thiz = (CRemoteClientDlg*)arg;
+	thiz->threadDownFile();
+	
+	_endthread();
+}
+
+void CRemoteClientDlg::threadEntryForWatchData(void* arg)
+{
+	CRemoteClientDlg* thiz = (CRemoteClientDlg*)arg;
+	thiz->threadWatchData();
+
+	_endthread();
+}
+
+void CRemoteClientDlg::threadWatchData()
+{
+	//循环网络连接，直到连接成功
+	CClientSockrt* pClient = NULL;
+	do {
+		pClient = CClientSockrt::getInstance();
+	} while (pClient == NULL);
+
+	for (;;) {//等价于while(true)
+		CPacket pack(6, NULL, 0);
+		bool ret = pClient->Send(pack);
+		if (ret) {
+			//收包，解包，拿出第一个包
+			int cmd = pClient->DealCommond();
+			if (cmd == 6) {
+				if (m_isFull == false) {
+					BYTE* pData = (BYTE*)pClient->GetPacket().strData.c_str();
+					//TODO: 存入CImage
+					m_isFull = true;
+				}
+			}
+		}
+		else {
+			//加Sleep后则允许cpu处理其他进程
+			Sleep(1);//如果send的时候，网络突然断掉，会死循环，cpu拉满
+
+		}
+	}
+}
+
+void CRemoteClientDlg::threadDownFile()
+{
+	//这行代码获取当前在列表视图（m_List）中选中的项的索引
+	//GetSelectionMark() 函数返回最后一次选中的项的索引。如果没有选中的项，通常会返回-1。
+	int nListSelected = m_List.GetSelectionMark();
+	//使用上一步获取的索引，这行代码获取列表视图中选中项的文本
+	//GetItemText() 函数接受两个参数：项的索引和列的索引。这里，索引0代表第一列，这通常是文件或文件夹的名称。
+	CString strFile = m_List.GetItemText(nListSelected, 0);
+
+	//这个参数指定对话框是保存文件对话框（FALSE）还是打开文件对话框（TRUE）。这里FALSE表示它是一个保存文件对话框。
+	//"*"：这个参数指定了默认的文件扩展名
+	//strFile：这个参数提供了默认的文件名。如果strFile非空，对话框会使用这个文件名作为默认值。
+	//this：这个参数指定了对话框的父窗口。在这个例子中，this指的是当前对象，意味着对话框的父窗口是创建它的窗口。
+	CFileDialog dlg(FALSE, "*",
+		strFile, OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT,
+		NULL, this);
+	// DoModal()方法显示对话框，并在用户关闭对话框时返回。如果用户点击“保存”按钮，DoModal()返回IDOK，
+	if (dlg.DoModal() == IDOK) {
+		FILE* pFile = fopen(dlg.GetPathName(), "wb+");
+		if (pFile == NULL) {
+			AfxMessageBox(_T("本地没有权限保存该文件，或者文件无法创建！！！"));
+			m_dlgStatus.ShowWindow(SW_HIDE);
+			return;
+		}
+
+		//这行代码获取树视图（m_Tree）中当前选中的项
+		HTREEITEM hSelected = m_Tree.GetSelectedItem();
+		strFile = GetPath(hSelected) + strFile;
+		TRACE("%s\r\n", LPCSTR(strFile));
+
+		CClientSockrt* pClient = CClientSockrt::getInstance();
+		//发送接受数据包，解第一个包，储在在m_pack里（第一个包是长度）
+		do {
+			//int ret = SendCommandPacket(4, false, (BYTE*)(LPCSTR)strFile, strFile.GetLength());
+			//4 => 0100    (4 << 1) => 1000  (1000)|0 => 1000  (1000)&1 => 1000)&(0001) => 0
+			int ret = SendMessage(WM_SEND_PACKET, 4 << 1 | 0, (LPARAM)(LPCSTR)strFile);
+			if (ret < 0) {
+				AfxMessageBox("执行下载命令失败！！！");
+				TRACE("执行下载失败：ret = %d\r\n", ret);
+				break;
+			}
+
+			long long nLength = *(long long*)pClient->GetPacket().strData.c_str();//得到第一个数据包储存的文件长度
+			if (nLength == 0) {
+				AfxMessageBox("文件长度为零或者无法读取文件！！！");
+				break;
+			}
+			//开始正式读取文件内容
+			long long nCount{};
+			while (nCount < nLength)
+			{
+				//继续从服务器接受数据，然后从缓冲区解一个包
+				ret = pClient->DealCommond();
+				if (ret < 0) {
+					AfxMessageBox("传输失败！！");
+					TRACE("传输失败，ret = %d\r\n", ret);
+					break;
+				}
+				fwrite(pClient->GetPacket().strData.c_str(), 1, pClient->GetPacket().strData.size(), pFile);
+				nCount += pClient->GetPacket().strData.size();
+			}
+		} while (0);
+		fclose(pFile);
+		pClient->CloseSocket();
+	}
+	m_dlgStatus.ShowWindow(SW_HIDE);
+	EndWaitCursor();
+	MessageBox(_T("下载完成！！"), _T("完成"));
+}
+
 void CRemoteClientDlg::LoadFileInfo()
 {
 	CPoint ptMouse;
@@ -337,6 +458,7 @@ void CRemoteClientDlg::LoadFileInfo()
 	pClient->CloseSocket();
 }
 
+//文件删除后列表刷新函数
 void CRemoteClientDlg::LoadFileCurrent()
 {
 	HTREEITEM hTree = m_Tree.GetSelectedItem();
@@ -408,66 +530,18 @@ void CRemoteClientDlg::OnNMRClickListFile(NMHDR* pNMHDR, LRESULT* pResult)
 
 void CRemoteClientDlg::OnDownloadFile()
 {
-	//这行代码获取当前在列表视图（m_List）中选中的项的索引
-	//GetSelectionMark() 函数返回最后一次选中的项的索引。如果没有选中的项，通常会返回-1。
-	int nListSelected = m_List.GetSelectionMark();
-	//使用上一步获取的索引，这行代码获取列表视图中选中项的文本
-	//GetItemText() 函数接受两个参数：项的索引和列的索引。这里，索引0代表第一列，这通常是文件或文件夹的名称。
-	CString strFile = m_List.GetItemText(nListSelected, 0);
-
-	//这个参数指定对话框是保存文件对话框（FALSE）还是打开文件对话框（TRUE）。这里FALSE表示它是一个保存文件对话框。
-	//"*"：这个参数指定了默认的文件扩展名
-	//strFile：这个参数提供了默认的文件名。如果strFile非空，对话框会使用这个文件名作为默认值。
-	//this：这个参数指定了对话框的父窗口。在这个例子中，this指的是当前对象，意味着对话框的父窗口是创建它的窗口。
-	CFileDialog dlg(FALSE, "*", 
-		strFile, OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT, 
-		NULL, this);
-	// DoModal()方法显示对话框，并在用户关闭对话框时返回。如果用户点击“保存”按钮，DoModal()返回IDOK，
-	if (dlg.DoModal() == IDOK) {
-		FILE* pFile = fopen(dlg.GetPathName(), "wb+");
-		if (pFile == NULL) {
-			AfxMessageBox(_T("本地没有权限保存该文件，或者文件无法创建！！！"));
-			return;
-		}
-
-		//这行代码获取树视图（m_Tree）中当前选中的项
-		HTREEITEM hSelected = m_Tree.GetSelectedItem();
-		strFile = GetPath(hSelected) + strFile;
-		TRACE("%s\r\n", LPCSTR(strFile));
-
-		CClientSockrt* pClient = CClientSockrt::getInstance();
-		//发送接受数据包，解第一个包，储在在m_pack里（第一个包是长度）
-		do {
-			int ret = SendCommandPacket(4, false, (BYTE*)(LPCTSTR)strFile, strFile.GetLength());
-			if (ret < 0) {
-				AfxMessageBox("执行下载命令失败！！！");
-				TRACE("执行下载失败：ret = %d\r\n", ret);
-				break;
-			}
-
-			long long nLength = *(long long*)pClient->GetPacket().strData.c_str();//得到第一个数据包储存的文件长度
-			if (nLength == 0) {
-				AfxMessageBox("文件长度为零或者无法读取文件！！！");
-				break;
-			}
-			//开始正式读取文件内容
-			long long nCount{};
-			while (nCount < nLength)
-			{
-				//继续从服务器接受数据，然后从缓冲区解一个包
-				ret = pClient->DealCommond();
-				if (ret < 0) {
-					AfxMessageBox("传输失败！！");
-					TRACE("传输失败，ret = %d\r\n", ret);
-					break;
-				}
-				fwrite(pClient->GetPacket().strData.c_str(), 1, pClient->GetPacket().strData.size(), pFile);
-				nCount += pClient->GetPacket().strData.size();
-			}
-		} while (0);
-		fclose(pFile);
-		pClient->CloseSocket();
-	}
+	//开启一个新线程,处理文件
+	//第二个参数 0 指的是新线程的堆栈大小。当设置为 0 时，表示使用默认的堆栈大小。堆栈大小可以影响到线程能够使用的局部变量的数量和大小。
+	//第三个参数 this 指向当前的 CRemoteClientDlg 实例。这个参数被传递给 threadEntryForDownFile 函数，允许该函数访问类的成员变量和函数。
+	_beginthread(CRemoteClientDlg::threadEntryForDownFile,0, this);
+	//主线程弹出子窗口
+	BeginWaitCursor(); //光标设置为等待沙漏的状态
+	m_dlgStatus.m_info.SetWindowText(_T("命令正在执行中！"));
+	//显示窗口
+	m_dlgStatus.ShowWindow(SW_SHOW);
+	m_dlgStatus.CenterWindow(this);
+	//SetActiveWindow API把窗口激活
+	m_dlgStatus.SetActiveWindow();
 }
 
 
@@ -497,4 +571,14 @@ void CRemoteClientDlg::OnRunFile()
 	if (ret < 0) {
 		AfxMessageBox("打开文件命令执行失败！！");
 	}
+}
+
+//消息函数
+LRESULT CRemoteClientDlg::OnSendPacket(WPARAM wParam, LPARAM lParam)
+{
+	//int ret = SendCommandPacket(4, false, (BYTE*)(LPCTSTR)strFile, strFile.GetLength());
+	CString strFile = (LPCSTR)lParam;
+	//wParam右移一位
+	int ret = SendCommandPacket(wParam >> 1, wParam & 1, (BYTE*)(LPCSTR)strFile, strFile.GetLength());
+	return ret;
 }
