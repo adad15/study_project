@@ -278,7 +278,7 @@ int SendScreen() {
     HRESULT ret = CreateStreamOnHGlobal(hMen, TRUE, &pStream);
     if (ret == S_OK) {
         //保存图像到流中
-        screen.Save(pStream, Gdiplus::ImageFormatTIFF);
+        screen.Save(pStream, Gdiplus::ImageFormatPNG);
         LARGE_INTEGER bg{};
         pStream->Seek(bg, STREAM_SEEK_SET, NULL); //将文件指针还原，以便打包发送
         //锁定全局内存并获取数据指针

@@ -11,17 +11,24 @@
 // CRemoteClientDlg 对话框
 class CRemoteClientDlg : public CDialogEx
 {
-// 构造
+	// 构造
 public:
 	CRemoteClientDlg(CWnd* pParent = nullptr);	// 标准构造函数
 
-// 对话框数据
+	// 对话框数据
 #ifdef AFX_DESIGN_TIME
 	enum { IDD = IDD_REMOTECLIENT_DIALOG };
 #endif
 
-	protected:
+protected:
 	virtual void DoDataExchange(CDataExchange* pDX);	// DDX/DDV 支持
+public:
+	bool isFull() const {
+		return m_isFull;
+	}
+	CImage& GetImage() {
+		return m_image;
+	}
 private:
 	CImage m_image; //缓存
 	bool m_isFull;  //true表示有缓存数据
@@ -77,4 +84,6 @@ public:
 	afx_msg void OnRunFile();
 	//写消息函数
 	afx_msg LRESULT OnSendPacket(WPARAM wParam, LPARAM lParam);
+	afx_msg void OnBnClickedBtnStartWatch();
+	afx_msg void OnTimer(UINT_PTR nIDEvent);
 };
