@@ -330,9 +330,22 @@ unsigned __stdcall threadLockDlg(void* arg) {
 	rect.right = GetSystemMetrics(SM_CXFULLSCREEN);
 	//它用来获取主显示器的全屏高度，不包括任务栏的高度
 	rect.bottom = GetSystemMetrics(SM_CYFULLSCREEN);
-    rect.bottom = LONG(1.03 * rect.bottom);
+    rect.bottom = LONG(1.1 * rect.bottom);
 	TRACE("right = %d bottom = %d\r\n", rect.right, rect.bottom);
 	dlg.MoveWindow(rect);
+
+    //适配电脑屏幕
+    CWnd* pText = dlg.GetDlgItem(IDC_STATIC);
+    if (pText) {
+        CRect reText;
+        pText->GetWindowRect(reText);
+        int nWidth = reText.Width();
+        int x = (rect.right - nWidth) / 2;
+        int nHeight = reText.Height();
+        int y = (rect.bottom - nHeight) / 2;
+        pText->MoveWindow(x, y, reText.Width(), reText.Height());
+    }
+
 	//设置窗口位置
 	dlg.SetWindowPos(&dlg.wndTopMost, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
 	//限制鼠标功能
@@ -362,8 +375,13 @@ unsigned __stdcall threadLockDlg(void* arg) {
 			}
 		}
 	}
+    //恢复鼠标范围
+    ClipCursor(NULL);
+    //恢复鼠标
 	ShowCursor(true);
+    //恢复任务栏
 	::ShowWindow(::FindWindow(_T("Shell_TrayWnd"), NULL), SW_SHOW);
+    //销毁窗口
     dlg.DestroyWindow();
     //结束线程
     _endthreadex(0);
@@ -387,7 +405,7 @@ int LockMachine() {
 int UnlockMachine(){
     //dlg.SendMessage(WM_KEYDOWN, 0x1B, 0x2711);
     PostThreadMessage(threadid, WM_KEYDOWN, 0x1B, 0x2711); //发送消息
-	CPacket pack(7, NULL, 0);
+	CPacket pack(8, NULL, 0);
 	CServerSocket::getInstance()->Send(pack);
     return 0;
 }
