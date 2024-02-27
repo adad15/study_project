@@ -58,7 +58,7 @@ CPoint CWatchDialog::UserPointtoRemoteScreemPoint(CPoint& point, bool isScreen)
 	
 	//本地坐标，到远程坐标
 	m_picture.GetWindowRect(clientRect); //获取 m_picture 控件的屏幕坐标
-	return CPoint(point.x * m_nObjWidth / clientRect.Width(), point.y * m_nObjHeight / clientRect.Height());
+	return CPoint(point.x * m_nObjWidth / clientRect.Width(), point.y * m_nObjHeight / (clientRect.Height()+30));
 }
 
 BOOL CWatchDialog::OnInitDialog()

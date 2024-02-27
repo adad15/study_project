@@ -7,6 +7,11 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "RometCtl", "RometCtl\RometC
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "RemoteClient", "RemoteClient\RemoteClient.vcxproj", "{B9C3C585-F059-4AE4-ADF1-8F5A707DECB3}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "解决方案项", "解决方案项", "{1AA1F7A6-78FF-4A5C-B1F3-8CF6D3F56450}"
+	ProjectSection(SolutionItems) = preProject
+		远程控制系统设计.mdj = 远程控制系统设计.mdj
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64

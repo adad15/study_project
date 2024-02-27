@@ -1,0 +1,28 @@
+{
+	"_type": "Project",
+	"_id": "AAAAAAFF+h6SjaM2Hec=",
+	"name": "远程控制系统设计",
+	"ownedElements": [
+		{
+			"_type": "UMLModel",
+			"_id": "AAAAAAFF+qBWK6M3Z8Y=",
+			"_parent": {
+				"$ref": "AAAAAAFF+h6SjaM2Hec="
+			},
+			"name": "Model",
+			"ownedElements": [
+				{
+					"_type": "UMLClassDiagram",
+					"_id": "AAAAAAFF+qBtyKM79qY=",
+					"_parent": {
+						"$ref": "AAAAAAFF+qBWK6M3Z8Y="
+					},
+					"name": "Main",
+					"defaultDiagram": true
+				}
+			]
+		}
+	],
+	"documentation": "该系统包括两个部分：\na.远程控制服务器\nb.请求控制客户端\n\n对于远程控制服务器有一下功能：\n1.文件操作（查询、删除、下载、运行）\n2.屏幕操作（监视、鼠标、锁定、解锁）\n\n对于请求控制客户端，有以下功能：\n1.发起控制请求（文件操作、屏幕操作）\n2.显示控制结果（应答反馈、监视画面显示）\n3.与远程桌面进行交互（鼠标、加锁/解锁）",
+	"author": "刘泽宇"
+}
