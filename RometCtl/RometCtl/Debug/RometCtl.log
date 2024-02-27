@@ -1,2 +1,6 @@
-﻿  RometCtl.cpp
+﻿  pch.cpp
+  LockInfoDialog.cpp
+  RometCtl.cpp
+  ServerSocket.cpp
+  正在生成代码...
   RometCtl.vcxproj -> D:\vs2022 code\RometClt\study_project\RometCtl\Debug\RometCtl.exe

@@ -146,7 +146,7 @@ BOOL CRemoteClientDlg::OnInitDialog()
 
 	// TODO: 在此添加额外的初始化代码
 	UpdateData();
-	m_server_address = 0x7F000001;
+	m_server_address = 0xC0A83865;
 	m_nPos = _T("9527");
 	UpdateData(FALSE);
 
@@ -308,6 +308,7 @@ void CRemoteClientDlg::threadEntryForWatchData(void* arg)
 
 void CRemoteClientDlg::threadWatchData()
 {
+//=====================可能存在异步问题导致程序崩溃=================
 	Sleep(50);//保证窗口先弹出
 	//循环网络连接，直到连接成功
 	CClientSockrt* pClient = NULL;
@@ -315,7 +316,7 @@ void CRemoteClientDlg::threadWatchData()
 		pClient = CClientSockrt::getInstance();
 	} while (pClient == NULL);
 
-	for (;;) {//等价于while(true)
+	while (!m_isClose) {//等价于while(true)
 		if (m_isFull == false) {
 			int ret = SendMessage(WM_SEND_PACKET, 6 << 1 | 1);
 			if (ret == 6) {
@@ -335,6 +336,7 @@ void CRemoteClientDlg::threadWatchData()
 					pStream->Write(pData, pClient->GetPacket().strData.size(), &length);
 					LARGE_INTEGER bg{};
 					pStream->Seek(bg, STREAM_SEEK_SET, NULL);//将文件指针还原
+					if ((HBITMAP)m_image != NULL) m_image.Destroy();
 					m_image.Load(pStream);
 					m_isFull = true;
 				}
@@ -624,12 +626,17 @@ LRESULT CRemoteClientDlg::OnSendPacket(WPARAM wParam, LPARAM lParam)
 
 void CRemoteClientDlg::OnBnClickedBtnStartWatch()
 {
+	m_isClose = false;
 	CWatchDialog dlg(this);
 	// TODO: 在此添加控件通知处理程序代码
-	_beginthread(CRemoteClientDlg::threadEntryForWatchData, 0, this);
+	HANDLE hTread = (HANDLE)_beginthread(CRemoteClientDlg::threadEntryForWatchData, 0, this);
 	dlg.DoModal();
+	m_isClose = true;
+	//这行代码等待之前创建的监控线程结束。WaitForSingleObject是一个同步函数，用于等待对象（这里是线程）进入信号状态或者超时。
+	// 这里的500表示超时时间，单位是毫秒。如果线程在500毫秒内结束，函数将返回；
+	// 如果500毫秒内线程没有结束，函数也会返回，但线程可能仍然在运行。
+	//WaitForSingleObject(hTread, 500);
 }
-
 
 // void CRemoteClientDlg::OnTimer(UINT_PTR nIDEvent)
 // {

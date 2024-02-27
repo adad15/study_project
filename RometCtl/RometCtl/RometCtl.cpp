@@ -267,7 +267,8 @@ int SendScreen() {
     //根据屏幕的宽度、高度和位深度创建一个图像。
     screen.Create(nWidth, nHeight, nBitPerPixel);
     //使用BitBlt函数将屏幕内容拷贝到CImage对象中。注意，这里硬编码了拷贝区域的大小为1920x1020，这可能不匹配所有屏幕尺寸。
-    BitBlt(screen.GetDC(), 0, 0, 1920, 1020, hSreen, 0, 0, SRCCOPY);
+	BitBlt(screen.GetDC(), 0, 0, nWidth, nHeight, hSreen, 0, 0, SRCCOPY);
+    //BitBlt(screen.GetDC(), 0, 0, 1920, 1020, hSreen, 0, 0, SRCCOPY);
     //释放之前获取的屏幕DC。没有窗口
     ReleaseDC(NULL, hSreen);
     //分配全局内存
