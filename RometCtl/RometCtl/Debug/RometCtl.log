@@ -1,5 +1,4 @@
-﻿  pch.cpp
-  LockInfoDialog.cpp
+﻿  Command.cpp
   RometCtl.cpp
   ServerSocket.cpp
   正在生成代码...
