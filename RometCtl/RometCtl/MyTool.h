@@ -14,4 +14,3 @@ public:
 		OutputDebugStringA(strOut.c_str());
 	}
 };
-

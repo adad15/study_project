@@ -40,38 +40,18 @@ int main()
         {
             CCommand cmd;
             // TODO: 在此处为应用程序的行为编写代码。
-            //套接字：socket bind listen accept read write close
-            //linux可以直接创建，但是win需要套接字环境的初始化。 
-           //单例模式，只创建了一个实例，返回的永远都是m_instance。
-            CServerSocket* pserver = CServerSocket::getInstance();
-            int count{ 0 };
-			if (pserver->InitSocket() == false) {
+            
+            int ret = CServerSocket::getInstance()->Run(&CCommand::RunCommand, &cmd);//为什么还要取地址？？
+            switch (ret)
+            {
+            case -1:
 				MessageBox(NULL, _T("网络初始化异常，未能初始化，请检查网络！"), _T("网络初始化失败！"), MB_OK | MB_ICONERROR);
 				exit(0);
-			}
-            while (CServerSocket::getInstance() != NULL) {
-                if (pserver->AcceptClient() == false) {
-                    if ((count++) > 3) {
-						MessageBox(NULL, _T("多次无法正常接入用户，自动结束程序"), _T("接入用户失败！"), MB_OK | MB_ICONERROR);
-                        exit(0);
-                    }
-					MessageBox(NULL, _T("无法正常接入用户，自动重试"), _T("接入用户失败！"), MB_OK | MB_ICONERROR);
-                    
-                }
-                TRACE("AcceptClient return true\r\n");
-                int ret = pserver->DealCommond();  //收包 解包 拿到命令
-                TRACE("DealCommond ret %d\r\n", ret);
-                //TODO:处理命令
-                if (ret > 0) {
-                    //不能这样写，pserver->GetPacket().sCmd会返回-1
-                    //ret = ExcuteCommand(pserver->GetPacket().sCmd);
-                    ret = cmd.ExcuteCommand(ret);
-                    if (ret != 0) {
-                        TRACE("执行命令失败：%d ret = %d\r\n", pserver->GetPacket().sCmd, ret);
-                    }
-                    pserver->CloseClient();  //采用短连接
-                    TRACE("cosket is doned!\r\n");
-                }
+                break;
+            case -2:
+				MessageBox(NULL, _T("多次无法正常接入用户，自动结束程序"), _T("接入用户失败！"), MB_OK | MB_ICONERROR);
+				exit(0);
+                break;
             }
         }
     }

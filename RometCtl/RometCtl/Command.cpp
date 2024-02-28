@@ -25,7 +25,7 @@ CCommand::CCommand():threadid(0)
 	}
 }
 
-int CCommand::ExcuteCommand(int nCmd)
+int CCommand::ExcuteCommand(int nCmd, std::list<CPacket>& lstCPacket,CPacket& inPacket)
 {
 	//哈希的方式，数据量增大，查找的效率不会跟swich那样骤增。
 	std::map<int, CMDFUNC>::iterator it = m_mapFunction.find(nCmd);
@@ -36,5 +36,5 @@ int CCommand::ExcuteCommand(int nCmd)
 	//this->*: 这个部分可能是最难理解的。this是一个指向当前对象的指针。
 	//在C++中，成员函数指针需要使用->*操作符来间接访问。
 	//如果有一个指向成员函数的指针，你需要通过一个对象（在这里是this指针指向的对象）来调用它。
-	return (this->*it->second)();
+	return (this->*it->second)(lstCPacket, inPacket);
 }

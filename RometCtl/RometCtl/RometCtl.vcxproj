@@ -147,6 +147,7 @@
     <ClInclude Include="framework.h" />
     <ClInclude Include="LockInfoDialog.h" />
     <ClInclude Include="MyTool.h" />
+    <ClInclude Include="Packet.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="RometCtl.h" />

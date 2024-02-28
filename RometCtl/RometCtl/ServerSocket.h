@@ -2,140 +2,12 @@
 #include "pch.h"
 #include "MyTool.h"
 #include "framework.h"
+#include <list>
+#include "Packet.h"
+
 #define BUFFER_SIZE 409600
 
-#pragma pack(push)//保存字节对齐的状态
-#pragma pack(1)
-
-class CPacket {
-public:
-	CPacket() :sHead(0), nLength(0), sCmd(0), sSum(0) {}
-	CPacket(const CPacket& pack) {
-		sHead = pack.sHead;
-		nLength = pack.nLength;
-		sCmd = pack.sCmd;
-		strData = pack.strData;
-		sSum = pack.sSum;
-	}
-	//打包数据
-	CPacket(WORD nCmd, const BYTE* pData, size_t nSize) {
-		sHead = 0xFEFE;
-		nLength = nSize + 4;
-		sCmd = nCmd;
-		if (nSize > 0) {
-			strData.resize(nSize);
-			memcpy((void*)strData.c_str(), pData, nSize);
-		}
-		else {
-			strData.clear();
-		}
-		
-		sSum = 0;
-		size_t a = strData.size();
-		for (size_t j{}; j < strData.size(); j++) {
-			sSum += BYTE(strData[j]) & 0xFF;
-		}
-	}
-	
-	//解析数据
-	CPacket(const BYTE* pData, size_t& nSize) {
-		//找包头
-		size_t i{};
-		for (; i < nSize; i++) {
-			if (*(WORD*)(pData + i) == 0xFEFE) {
-				sHead = *(WORD*)(pData + i);
-				i += 2;  //i向后移动两字节，把包头部分除去
-				break;
-			}
-			if (i + 4 + 2 + 2 > nSize) { //包数据可能不全，或者包头未能全部接收到
-				nSize = 0;
-				return;
-			}
-		}
-		nLength = *(DWORD*)(pData + i); i += 4; //i向后移动4字节，除去长度数据
-		if (nLength + i > nSize) { //包未完全接收到，就返回解析失败
-			nSize = 0;
-			return;
-		}
-		sCmd = *(WORD*)(pData + i); i += 2; //i向后移动2字节，除去命令长度
-		if (nLength > 4) {
-			strData.resize(nLength - 2 - 2); //调整字符串的长度
-			memcpy((void*)strData.c_str(), pData + i, nLength - 4); //复制字符串
-			i += nLength - 4;
-		}
-		sSum = *(WORD*)(pData + i); i += 2;
-		WORD sum{};
-		for (size_t j{}; j < strData.size(); j++) {
-			sum += BYTE(strData[j]) & 0xFF;
-		}
-		if (sum == sSum) {
-			nSize = i; //不要忘记包头前面可能残余数据,一起销毁掉。
-			//nSize = nLength + 2 + 4; //包头部分+长度部分
-			return;
-		}
-		nSize = 0;
-	}
-	~CPacket() {}
-	CPacket& operator=(const CPacket& pack) {
-		if (this != &pack) {
-			sHead = pack.sHead;
-			nLength = pack.nLength;
-			sCmd = pack.sCmd;
-			strData = pack.strData;
-			sSum = pack.sSum;
-		}
-		return *this;   //实现连等
-	}
-	int Size() {//包数据的大小
-		return nLength + 2 + 4;
-	}
-	const char* Data() {
-		strOut.resize(nLength + 6);
-		BYTE* pData = (BYTE*)strOut.c_str();
-		*(WORD*)pData = sHead; pData += 2;
-		*(DWORD*)pData = nLength; pData += 4;
-		*(WORD*)pData = sCmd; pData += 2;
-		memcpy(pData, strData.c_str(), strData.size()); pData += strData.size();
-		*(WORD*)pData = sSum;
-
-		return strOut.c_str();
-	}
-public:
-	WORD sHead;           //包头 0xFEFE
-	DWORD nLength;        //包长度（从控制命令开始，到和校验结束）
-	WORD sCmd;            //控制命令
-	std::string strData;  //包数据
-	WORD sSum;            //和校验，只检验包数据的长度
-	std::string strOut;   //整个包的数据
-};
-#pragma pack(pop)//还原字节对齐的状态
-
-typedef struct MouseEvent
-{
-	MouseEvent() {
-		nAction = 0;
-		nButton = -1;
-		ptXY.x = 0;
-		ptXY.y = 0;
-	}
-	WORD nAction; //点击、移动、双击
-	WORD nButton; //左键、中键
-	POINT ptXY;
-}MOUSEEV, * PMOUSEEV;
-
-//定义文件结构体
-typedef struct file_info {
-	file_info() {
-		IsInvalid = FALSE;
-		IsDirectory = FALSE;
-		HasNext = TRUE;
-		memset(szFileName, 0, sizeof(szFileName));
-	}
-	BOOL IsInvalid;//是否有效
-	BOOL IsDirectory;//是否为目录
-	BOOL HasNext;//是否还有后续
-	char szFileName[256];//文件名
-}FILEINFPO, * PFILEINFPO;
+typedef void(*SOCKET_CALLBACK)(void* arg, int status, std::list<CPacket>& lstCPacket,CPacket& inPacket);//定义函数指针
 
 class CServerSocket
 {
@@ -149,13 +21,46 @@ public:
 
 		return m_instance;
 	}
-	bool InitSocket() {
+
+	int Run(SOCKET_CALLBACK callback, void* arg, short port = 9527) {
+		//套接字：socket bind listen accept read write close
+		//linux可以直接创建，但是win需要套接字环境的初始化。 
+		//单例模式，只创建了一个实例，返回的永远都是m_instance。
+		bool ret = InitSocket(port);
+		if (ret == false) return -1;
+
+		std::list<CPacket> lstPackets;
+
+		m_callback = callback;
+		m_arg = arg;
+
+		int count{};
+		while (true)
+		{
+			if (AcceptClient() == false) {
+				if (count >= 3) return -2;
+				count++;
+			}
+			int ret = DealCommond();
+			if (ret > 0) {
+				m_callback(m_arg, ret, lstPackets, m_packet);
+				if (lstPackets.size() > 0) {
+					Send(lstPackets.front());
+					lstPackets.pop_front();
+				}
+			}
+			CloseClient();//采用短连接
+		}
+		return 0;
+	}
+protected:
+	bool InitSocket(short port) {
 		if (m_sock == -1) return false;
 		sockaddr_in serv_addr;
 		memset(&serv_addr, 0, sizeof(serv_addr));
 		serv_addr.sin_family = AF_INET;
 		serv_addr.sin_addr.S_un.S_addr = htonl(INADDR_ANY);
-		serv_addr.sin_port = htons(9527);
+		serv_addr.sin_port = htons(port);
 
 		if (bind(m_sock, (sockaddr*)&serv_addr, sizeof(serv_addr)) == -1) return false;
 		
@@ -163,6 +68,7 @@ public:
 
 		return true;
 	}
+
 	bool AcceptClient() {
 		TRACE("enter AcceptClient\r\n");
 		sockaddr_in client_addr;
@@ -235,10 +141,14 @@ public:
 		return false;
 	}
 	void CloseClient() {
-		closesocket(m_client);
-		m_client = INVALID_SOCKET;
+		if (m_client != INVALID_SOCKET) {
+			closesocket(m_client);
+			m_client = INVALID_SOCKET;
+		}
 	}
 private:
+	SOCKET_CALLBACK m_callback;
+	void* m_arg;
 	SOCKET m_sock;
 	SOCKET m_client;
 	CPacket m_packet;  //在CPacket类中必须要有复制构造函数
