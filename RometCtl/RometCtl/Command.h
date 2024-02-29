@@ -170,7 +170,6 @@ protected:
 			//lstFileInfos.push_back(finfo);
 			//打包发送数据
 			lstCPacket.push_back(CPacket(2, (BYTE*)&finfo, sizeof(finfo)));
-			//Dump((BYTE*)pack.Data(), pack.Size());
 		} while (!_findnext(hfind, &fdata));
 		//_findnext函数使用之前由_findfirst获取的搜索句柄hfind，并尝试找到下一个文件。
 		// 如果找到了，_findnext返回0并更新fdata结构体为新找到的文件的信息。
@@ -216,7 +215,7 @@ protected:
 			{
 				rlen = fread(buffer, 1, 1024, pFile);
 				//发送文件
-				lstCPacket.push_back(CPacket(4, (BYTE*)&data, 8));
+				lstCPacket.push_back(CPacket(4, (BYTE*)&buffer, rlen));
 			} while (rlen >= 1024);
 			fclose(pFile);
 		}

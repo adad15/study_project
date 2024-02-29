@@ -252,16 +252,20 @@ void CRemoteClientDlg::OnBnClickedBtnFileinfo()
 	m_Tree.DeleteAllItems();
 
 	for (size_t i{}; i < drivers.size(); i++) {
-		if (drivers[i] != ',') {
-			dr += drivers[i];
+		if (drivers[i] == ',') {
 			dr += ":";
 			//把信息添加到根目录，TVI_LAST表示追加的形式。
 			HTREEITEM hTemp = m_Tree.InsertItem(dr.c_str(), TVI_ROOT, TVI_LAST);
 			m_Tree.InsertItem(NULL, hTemp, TVI_LAST); //在目录节点后面添加空的子节点
+			dr.clear();
 			continue;
 		}
-		dr.clear();
-
+		dr += drivers[i];
+	}
+	if (dr.size() > 0) {
+		dr += ":";
+		HTREEITEM hTemp = m_Tree.InsertItem(dr.c_str(), TVI_ROOT, TVI_LAST);
+		m_Tree.InsertItem(NULL, hTemp, TVI_LAST); //在目录节点后面添加空的子节点
 	}
 }
 

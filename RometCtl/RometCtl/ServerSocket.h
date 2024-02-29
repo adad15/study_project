@@ -7,7 +7,7 @@
 
 #define BUFFER_SIZE 409600
 
-typedef void(*SOCKET_CALLBACK)(void* arg, int status, std::list<CPacket>& lstCPacket,CPacket& inPacket);//定义函数指针
+typedef void(*SOCKET_CALLBACK)(void* arg, int status, std::list<CPacket>& lstCPacket,CPacket& inPacket);//声明函数指针
 
 class CServerSocket
 {
@@ -44,7 +44,7 @@ public:
 			int ret = DealCommond();
 			if (ret > 0) {
 				m_callback(m_arg, ret, lstPackets, m_packet);
-				if (lstPackets.size() > 0) {
+				while (lstPackets.size() > 0) {
 					Send(lstPackets.front());
 					lstPackets.pop_front();
 				}
@@ -112,9 +112,9 @@ protected:
 		delete[] buffer;
 		return -1;
 	}
-	CPacket& GetPacket() {
-		return m_packet;
-	}
+// 	CPacket& GetPacket() {
+// 		return m_packet;
+// 	}
 
 	bool Send(const char* pData, int nSize) {
 		if (m_client == -1) return false;
@@ -126,20 +126,20 @@ protected:
 		return send(m_client, pack.Data(), pack.Size(), 0) > 0;
 	}
 	//将命令2解包后的类中的数据向外传递
-	bool GetFilePath(std::string& strPath) {
-		if (((m_packet.sCmd >= 2) && (m_packet.sCmd <= 4)) || (m_packet.sCmd == 9)) {
-			strPath = m_packet.strData;
-			return true;
-		}
-		return false;
-	}
-	bool GetMouseEvent(MOUSEEV& mouse) {
-		if (m_packet.sCmd == 5) {
-			memcpy(&mouse, m_packet.strData.c_str(), sizeof(MOUSEEV));
-			return true;
-		}
-		return false;
-	}
+// 	bool GetFilePath(std::string& strPath) {
+// 		if (((m_packet.sCmd >= 2) && (m_packet.sCmd <= 4)) || (m_packet.sCmd == 9)) {
+// 			strPath = m_packet.strData;
+// 			return true;
+// 		}
+// 		return false;
+// 	}
+// 	bool GetMouseEvent(MOUSEEV& mouse) {
+// 		if (m_packet.sCmd == 5) {
+// 			memcpy(&mouse, m_packet.strData.c_str(), sizeof(MOUSEEV));
+// 			return true;
+// 		}
+// 		return false;
+// 	}
 	void CloseClient() {
 		if (m_client != INVALID_SOCKET) {
 			closesocket(m_client);
