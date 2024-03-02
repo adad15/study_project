@@ -19,15 +19,22 @@ public:
 public:
 	int m_nObjWidth;
 	int m_nObjHeight;
+	bool isFull() const {
+		return m_isFull;
+	}
+	void SetImageStatus(bool isFull = false) {
+		m_isFull = isFull;
+	}
 protected:
 	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV 支持
-
+	
 	DECLARE_MESSAGE_MAP()
 public:
 	CPoint UserPointtoRemoteScreemPoint(CPoint& point, bool isScreen = false);
 	virtual BOOL OnInitDialog();
 	afx_msg void OnTimer(UINT_PTR nIDEvent);
 	CStatic m_picture;
+	bool m_isFull;  //true表示有缓存数据
 	afx_msg void OnLButtonDblClk(UINT nFlags, CPoint point);
 	afx_msg void OnLButtonDown(UINT nFlags, CPoint point);
 	afx_msg void OnRButtonDblClk(UINT nFlags, CPoint point);

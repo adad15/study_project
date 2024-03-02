@@ -25,7 +25,7 @@ CClientController* CClientController::getInstance()
 			m_mapFunc.insert(std::pair<UINT, MSGFUNC>(MsgFuncs[i].nMsg, MsgFuncs[i].func));
 		}
 	}
-	return nullptr;
+	return m_instance;
 }
 
 int CClientController::InitController()
@@ -54,12 +54,54 @@ LRESULT CClientController::SendMessage(MSG msg)
 	return info.result;
 }
 
+int CClientController::SendCommandPacket(int nCmd, bool bAutoClose, BYTE* pData, size_t nLength)
+{
+	//发送封装好的数据包
+	CClientSockrt* pClient = CClientSockrt::getInstance();
+	if (pClient->InitSocket() == false) return false;
+	pClient->Send(CPacket(nCmd, pData, nLength));
+	//接受服务端发送的应答包，并解包
+	int cmd = DealCommand();
+ 	TRACE("ack:%d\r\n", cmd);
+	if (bAutoClose)
+		CloseSocket();
+	return cmd;
+}
+
+int CClientController::DownFile(CString strPath)
+{
+	CFileDialog dlg(FALSE, "*",
+		strPath, OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT,
+		NULL, &m_remoteDlg);
+	// DoModal()方法显示对话框，并在用户关闭对话框时返回。如果用户点击“保存”按钮，DoModal()返回IDOK，
+	if (dlg.DoModal() == IDOK) {
+		m_strRemote = strPath;//拿到远程地址
+		m_strLocal = dlg.GetPathName();//本地保存地址
+		//开启一个新线程,处理文件
+		//第二个参数 0 指的是新线程的堆栈大小。当设置为 0 时，表示使用默认的堆栈大小。堆栈大小可以影响到线程能够使用的局部变量的数量和大小。
+		//第三个参数 this 指向当前的 CRemoteClientDlg 实例。这个参数被传递给 threadEntryForDownFile 函数，允许该函数访问类的成员变量和函数。
+		m_hThreadDownload = (HANDLE)_beginthread(&CClientController::threadDownloadEntry, 0, this);
+		//主线程弹出子窗口
+		if (WaitForSingleObject(m_hThreadDownload, 0) != WAIT_TIMEOUT) {//判断线程是的正确启动，线程启动时等待时间为0，必然等待超时
+			return -1;
+		}
+
+		m_statusDlg.BeginWaitCursor();//光标设置为等待沙漏的状态
+		m_statusDlg.m_info.SetWindowText(_T("命令正在执行中！"));
+		//显示窗口
+		m_statusDlg.ShowWindow(SW_SHOW);
+		m_statusDlg.CenterWindow(&m_remoteDlg);
+		//SetActiveWindow API把窗口激活
+		m_statusDlg.SetActiveWindow();
+	}
+	return 0;
+}
+
 void CClientController::StartWatchScreen()
 {
 	m_isClose = false;
-	CWatchDialog dlg(&m_remoteDlg);
 	m_hThreadWatch= (HANDLE)_beginthread(&CClientController::threadEntryForWatchData, 0, this);
-	dlg.DoModal();
+	m_watchDlg.DoModal();
 	m_isClose = true;
 	//这行代码等待之前创建的监控线程结束。WaitForSingleObject是一个同步函数，用于等待对象（这里是线程）进入信号状态或者超时。
 	//这里的500表示超时时间，单位是毫秒。如果线程在500毫秒内结束，函数将返回；
@@ -71,10 +113,10 @@ void CClientController::threadWatchScreen()
 {
 	Sleep(50);
 	while (!m_isClose) {
-		if (m_remoteDlg.isFull() == false) {
+		if (m_watchDlg.isFull() == false) {
 			int ret = SendCommandPacket(6);
 			if (GetImage(m_remoteDlg.GetImage()) == 0) {
-				m_remoteDlg.SetImageStatus(true);
+				m_watchDlg.SetImageStatus(true);
 			}
 			else{
 				TRACE("获取图片失败！ret = %d\r\n", ret);
