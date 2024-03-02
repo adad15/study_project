@@ -35,31 +35,13 @@ public:
 private:
 	CImage m_image; //缓存
 	bool m_isFull;  //true表示有缓存数据
-	bool m_isClose;//监控是否关闭
-private:
-	//监控线程函数
-	static void threadEntryForWatchData(void* arg);//无this指针，不好调用成员方法
-	void threadWatchData();//有this指针，访问成员变量很方便
 	
-	//线程函数,要声明为静态，不创建对象也能使用
-	static void threadEntryForDownFile(void* arg);
-	//把线程函数中的文件处理代码封装成函数
-	void threadDownFile();
-	
+private:	
 	void LoadFileInfo();
 	void LoadFileCurrent();
 	CString GetPath(HTREEITEM hTree);
 	void DeleteTreeChildItem(HTREEITEM hTree);
-	//1 查看磁盘分区
-	//2 查看指定目录下的文件
-	//3 打开文件
-	//4 下载文件
-	//5 鼠标操作
-	//6 发送屏幕内容
-	//7 锁机
-	//8 解锁
-	//9 删除文件
-	//返回值，是命令号，如果小于零则是错误
+	
 	int SendCommandPacket(int nCmd, bool bAutoClose = true, BYTE* pData = NULL, size_t nLength = 0);
 // 实现
 protected:
@@ -90,4 +72,6 @@ public:
 	afx_msg LRESULT OnSendPacket(WPARAM wParam, LPARAM lParam);
 	afx_msg void OnBnClickedBtnStartWatch();
 	//afx_msg void OnTimer(UINT_PTR nIDEvent);
+	afx_msg void OnIpnFieldchangedIpaddressServ(NMHDR* pNMHDR, LRESULT* pResult);
+	afx_msg void OnEnChangeEditPort();
 };

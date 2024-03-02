@@ -187,6 +187,7 @@
     <ClInclude Include="ClientSockrt.h" />
     <ClInclude Include="CWatchDialog.h" />
     <ClInclude Include="framework.h" />
+    <ClInclude Include="MyTool.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="RemoteClient.h" />
     <ClInclude Include="RemoteClientDlg.h" />

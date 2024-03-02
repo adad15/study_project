@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "ClientSockrt.h"
 #include "ClientController.h"
 
 std::map<UINT, CClientController::MSGFUNC>CClientController::m_mapFunc;
@@ -53,6 +54,91 @@ LRESULT CClientController::SendMessage(MSG msg)
 	return info.result;
 }
 
+void CClientController::StartWatchScreen()
+{
+	m_isClose = false;
+	CWatchDialog dlg(&m_remoteDlg);
+	m_hThreadWatch= (HANDLE)_beginthread(&CClientController::threadEntryForWatchData, 0, this);
+	dlg.DoModal();
+	m_isClose = true;
+	//这行代码等待之前创建的监控线程结束。WaitForSingleObject是一个同步函数，用于等待对象（这里是线程）进入信号状态或者超时。
+	//这里的500表示超时时间，单位是毫秒。如果线程在500毫秒内结束，函数将返回；
+	//如果500毫秒内线程没有结束，函数也会返回，但线程可能仍然在运行。
+	WaitForSingleObject(m_hThreadWatch, 500);
+}
+
+void CClientController::threadWatchScreen()
+{
+	Sleep(50);
+	while (!m_isClose) {
+		if (m_remoteDlg.isFull() == false) {
+			int ret = SendCommandPacket(6);
+			if (GetImage(m_remoteDlg.GetImage()) == 0) {
+				m_remoteDlg.SetImageStatus(true);
+			}
+			else{
+				TRACE("获取图片失败！ret = %d\r\n", ret);
+			}
+		}
+	}
+	Sleep(1);
+}
+
+void CClientController::threadEntryForWatchData(void* arg)
+{
+	CClientController* thiz = (CClientController*)arg;
+	thiz->threadWatchScreen();
+	_endthread();
+}
+
+void CClientController::threadDownloadFile()
+{
+	FILE* pFile = fopen(m_strLocal, "wb+");
+	if (pFile == NULL) {
+		AfxMessageBox(_T("本地没有权限保存该文件，或者文件无法创建！！！"));
+		m_statusDlg.ShowWindow(SW_HIDE);
+		m_remoteDlg.EndWaitCursor();
+		return;
+	}
+	CClientSockrt* pClient = CClientSockrt::getInstance();
+	do 
+	{
+		int ret = SendCommandPacket(4, false, (BYTE*)(LPCSTR)m_strRemote, m_strRemote.GetLength());
+		
+		long long nLength = *(long long*)pClient->GetPacket().strData.c_str();//得到第一个数据包储存的文件长度
+		if (nLength == 0) {
+			AfxMessageBox("文件长度为零或者无法读取文件！！！");
+			break;
+		}
+		//开始正式读取文件内容
+		long long nCount{};
+		while (nCount < nLength)
+		{
+			//继续从服务器接受数据，然后从缓冲区解一个包
+			ret = pClient->DealCommond();
+			if (ret < 0) {
+				AfxMessageBox("传输失败！！");
+				TRACE("传输失败，ret = %d\r\n", ret);
+				break;
+			}
+			fwrite(pClient->GetPacket().strData.c_str(), 1, pClient->GetPacket().strData.size(), pFile);
+			nCount += pClient->GetPacket().strData.size();
+		}
+	} while (false);
+	fclose(pFile);
+	pClient->CloseSocket();
+	m_statusDlg.ShowWindow(SW_HIDE);
+	m_remoteDlg.EndWaitCursor();
+	m_remoteDlg.MessageBox(_T("下载完成！！"), _T("完成"));
+}
+
+void CClientController::threadDownloadEntry(void* arg)
+{
+	CClientController* thiz = (CClientController*)arg;
+	thiz->threadDownloadFile();
+	_endthread();
+}
+
 unsigned __stdcall CClientController::threadEntry(void* arg)
 {
 	CClientController* thiz = (CClientController*)arg;
@@ -92,12 +178,16 @@ void CClientController::threadFunc()
 
 LRESULT CClientController::OnSendPack(UINT nMsg, WPARAM wParam, LPARAM lParam)
 {
-	return LRESULT();
+	CClientSockrt* pClient = CClientSockrt::getInstance();
+	CPacket* pPacket = (CPacket*)wParam;
+	return pClient->Send(*pPacket);
 }
 
 LRESULT CClientController::OnSendData(UINT nMsg, WPARAM wParam, LPARAM lParam)
 {
-	return LRESULT();
+	CClientSockrt* pClient = CClientSockrt::getInstance();
+	char* pBuffer = (char*)wParam;
+	return pClient->Send(pBuffer, (int)lParam);
 }
 
 LRESULT CClientController::OnShowStatus(UINT nMsg, WPARAM wParam, LPARAM lParam)
