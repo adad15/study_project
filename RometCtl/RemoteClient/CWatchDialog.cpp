@@ -82,25 +82,21 @@ void CWatchDialog::OnTimer(UINT_PTR nIDEvent){
 		if (m_isFull) {
 			CRect rect;
 			m_picture.GetWindowRect(rect);
-			CImage image;
-			pParent->GetImage(image);//输出参数
 
-			if (m_nObjWidth == -1) {
-				m_nObjWidth = image.GetWidth();
-			}
-			if (m_nObjHeight == -1) {
-				m_nObjHeight = image.GetHeight();
-			}
+			m_nObjWidth = m_image.GetWidth();
+			m_nObjHeight = m_image.GetHeight();
+	
 			//得到picture contol的Dc
 			//通过GetImage()方法获取父窗口中的图像
 			//使用BitBlt函数将该图像绘制到m_picture（一个界面控件）的设备上下文（DC）中
 			//SRCCOPY是复制的模式，表示进行直接复制。
 			//pParent->GetImage().BitBlt(m_picture.GetDC()->GetSafeHdc(), 0, 0, SRCCOPY);
-			image.StretchBlt(m_picture.GetDC()->GetSafeHdc(),
+			m_image.StretchBlt(m_picture.GetDC()->GetSafeHdc(),
 				0, 0, rect.Width(), rect.Height(), SRCCOPY);
 			m_picture.InvalidateRect(NULL);
+			TRACE("更新图片完成%d %d %08X\r\n", m_nObjWidth, m_nObjHeight, (HBITMAP)m_image);
 			//调用GetImage()返回的图像对象的Destroy()方法，可能是为了释放与这个图像相关的资源。
-			image.Destroy();
+			m_image.Destroy();
 			//把m_isFull设置为false。
 			m_isFull = false;
 		}

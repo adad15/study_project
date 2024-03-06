@@ -36,11 +36,11 @@ public:
 	void CloseSocket() {
 		CClientSockrt::getInstance()->CloseSocket();
 	}
-	bool SendPackst(const CPacket& pack) {
+	/*bool SendPackst(const CPacket& pack) {
 		CClientSockrt* pClient = CClientSockrt::getInstance();
 		if (pClient->InitSocket() == false) return false;
 		pClient->Send(pack);
-	}
+	}*/
 	//1 查看磁盘分区
 	//2 查看指定目录下的文件
 	//3 打开文件
@@ -51,7 +51,8 @@ public:
 	//8 解锁
 	//9 删除文件
 	//返回值，是命令号，如果小于零则是错误
-	int SendCommandPacket(int nCmd, bool bAutoClose = true, BYTE* pData = NULL, size_t nLength = 0);
+	int SendCommandPacket(int nCmd, bool bAutoClose = true, BYTE* pData = NULL,
+		size_t nLength = 0, std::list<CPacket>* plstPacks = NULL);
 	int GetImage(CImage& image) {
 		CClientSockrt* pClient = CClientSockrt::getInstance();
 		return CMyTool::Bytes2Image(image, pClient->GetPacket().strData);
@@ -88,8 +89,8 @@ protected:
 			m_instance = NULL;
 		}
 	}
-	LRESULT OnSendPack(UINT nMsg, WPARAM wParam, LPARAM lParam);
-	LRESULT OnSendData(UINT nMsg, WPARAM wParam, LPARAM lParam);
+	//LRESULT OnSendPack(UINT nMsg, WPARAM wParam, LPARAM lParam);
+	//LRESULT OnSendData(UINT nMsg, WPARAM wParam, LPARAM lParam);
 	LRESULT OnShowStatus(UINT nMsg, WPARAM wParam, LPARAM lParam);
 	LRESULT OnShowWatcher(UINT nMsg, WPARAM wParam, LPARAM lParam);
 

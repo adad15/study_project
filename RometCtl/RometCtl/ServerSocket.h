@@ -79,6 +79,7 @@ protected:
 		//closesocket(m_client);
 		return true;
 	}
+
 	int DealCommond(){
 		if (m_client == -1) return -1;
 		char* buffer = new char[BUFFER_SIZE];

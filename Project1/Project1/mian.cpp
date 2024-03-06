@@ -1,38 +1,61 @@
-﻿// map容器构造
-#include <iostream>
-#include <map>
-#include <string.h>
-using namespace std;
-
+﻿// 火车站卖票 A工人 B工人
+#include <stdio.h>
+#include <windows.h>
+#include <process.h>
+int iTickets = 100;
+HANDLE g_hEvent;
+DWORD WINAPI SellTicketA(void* lpParam)
+{
+	while (1)
+	{
+		WaitForSingleObject(g_hEvent, INFINITE);
+		if (iTickets > 0)
+		{
+			Sleep(1);
+			iTickets--;
+			printf("A remain %d\n", iTickets);
+		}
+		else
+		{
+			break;
+		}
+		SetEvent(g_hEvent);
+	}
+	return 0;
+}
+DWORD WINAPI SellTicketB(void* lpParam)
+{
+	while (1)
+	{
+		WaitForSingleObject(g_hEvent, INFINITE);
+		if (iTickets > 0)
+		{
+			Sleep(1);
+			iTickets--;
+			printf("B remain %d\n", iTickets);
+		}
+		else
+		{
+			break;
+		}
+		SetEvent(g_hEvent);
+	}
+	return 0;//0 内核对象被销毁
+}
 int main()
 {
-	// 1）map();  // 创建一个空的map容器。
-	map<int, string> m1;
-
-	// 2）map(initializer_list<pair<K, V>> il); // 使用统一初始化列表。
-	map<int, string> m2({ {8, "冰冰"}, {3, "西施"}, {1, "幂幂"}, {7, "金莲"}, {5, "西瓜"} });
-	// map<int, string> m2={ { 8,"冰冰" }, { 3,"西施" }, { 1,"幂幂" }, { 7,"金莲" }, { 5,"西瓜" } };
-	// map<int, string> m2   { { 8,"冰冰" }, { 3,"西施" }, { 1,"幂幂" }, { 7,"金莲" }, { 5,"西瓜" } };
-	for (auto& val : m2)
-		cout << val.first << "," << val.second << " ";
-	cout << endl;
-
-	// 3）map(const map<K, V>&m);  // 拷贝构造函数。
-	map<int, string> m3 = m2;
-	for (auto& val : m3)
-		cout << val.first << "," << val.second << " ";
-	cout << endl;
-
-	// 4）map(Iterator first, Iterator last);  // 用迭代器创建map容器。
-	auto first = m3.begin();
-	first++;
-	auto last = m3.end();
-	last--;
-	map<int, string> m4(first, last);
-	for (auto& val : m4)
-		cout << val.first << "," << val.second << " ";
-	cout << endl;
-
-	// 5）map(map<K, V> && m);  // 移动构造函数（C++11标准）。
+	HANDLE hThreadA, hThreadB;
+	//创建线程
+	hThreadA = CreateThread(NULL, 0, SellTicketA, NULL, 0, 0);// 2
+	hThreadB = CreateThread(NULL, 0, SellTicketB, NULL, 0, 0);
+	//在您的代码中，主线程（main 函数中的代码）并不需要与这些子线程进行直接的交互（如等待它们结束或获取它们的退出代码）。
+	//因此，一旦线程被创建，它们的句柄对于主线程来说就不再有用。关闭这些句柄不会影响线程的执行。
+	CloseHandle(hThreadA); //1
+	CloseHandle(hThreadB);
+	g_hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+	SetEvent(g_hEvent);
+	Sleep(4000);
+	CloseHandle(g_hEvent);
 	system("pause");
+	return 0;
 }

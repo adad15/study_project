@@ -168,7 +168,7 @@ void CRemoteClientDlg::OnPaint()
 
 		SendMessage(WM_ICONERASEBKGND, reinterpret_cast<WPARAM>(dc.GetSafeHdc()), 0);
 
-		// 使图标在工作区矩形中居中
+		// 使图标在工作区矩形中居中--*-0
 		int cxIcon = GetSystemMetrics(SM_CXICON);
 		int cyIcon = GetSystemMetrics(SM_CYICON);
 		CRect rect;
@@ -304,7 +304,7 @@ void CRemoteClientDlg::LoadFileInfo()
 		if (cmd < 0) break;
 		pInfp = (PFILEINFPO)CClientSockrt::getInstance()->GetPacket().strData.c_str();
 	}
-	CClientController::getInstance()->CloseSocket();
+	//CClientController::getInstance()->CloseSocket();
 }
 
 //文件删除后列表刷新函数
@@ -333,7 +333,7 @@ void CRemoteClientDlg::LoadFileCurrent()
 		if (cmd < 0) break;
 		pInfp = (PFILEINFPO)CClientSockrt::getInstance()->GetPacket().strData.c_str();
 	}
-	pClient->CloseSocket();
+	//pClient->CloseSocket();
 }
 
 void CRemoteClientDlg::OnNMDblclkTreeDir(NMHDR* pNMHDR, LRESULT* pResult)

@@ -14,8 +14,8 @@ CClientController* CClientController::getInstance()
 			UINT nMsg;
 			MSGFUNC func;
 		}MsgFuncs[] = {
-			{WM_SNED_PACK,&CClientController::OnSendPack },
-			{WM_SEND_DATA,&CClientController::OnSendData },
+			/*{WM_SNED_PACK,&CClientController::OnSendPack },
+			{WM_SEND_DATA,&CClientController::OnSendData },*/
 			{WM_SHOW_STATUS,&CClientController::OnShowStatus },
 			{WM_SHOW_WATCH,&CClientController::OnShowWatcher },
 			{(UINT) - 1,NULL}
@@ -45,27 +45,38 @@ int CClientController::Invoke(CWnd*& pMainWnd)
 
 LRESULT CClientController::SendMessage(MSG msg)
 {
-	
 	HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
 	if (hEvent == NULL)return -2;
 	MSGINFO info(msg);
+	//向m_nThreadID线程发送消息
 	PostThreadMessage(m_nThreadID, WM_SEND_MESSAGE, (WPARAM)&info, (LPARAM)&hEvent);
-	WaitForSingleObject(hEvent, -1);
+	WaitForSingleObject(hEvent, INFINITE);
+	CloseHandle(hEvent);
 	return info.result;
 }
 
-int CClientController::SendCommandPacket(int nCmd, bool bAutoClose, BYTE* pData, size_t nLength)
+int CClientController::SendCommandPacket(int nCmd, bool bAutoClose, BYTE* pData,
+	size_t nLength, std::list<CPacket>* plstPacks)//plstPacks = null 表示不关心应答
 {
+	TRACE("%s start %lld \r\n", __FUNCTION__, GetTickCount64());
 	//发送封装好的数据包
 	CClientSockrt* pClient = CClientSockrt::getInstance();
-	if (pClient->InitSocket() == false) return false;
-	pClient->Send(CPacket(nCmd, pData, nLength));
+	/*if (pClient->InitSocket() == false) return false;*/
+	HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+	
+	//不应该直接发送，而是投入队列。
+	std::list<CPacket>lstPacks;//应答结果的包
+	if (plstPacks == NULL)
+		plstPacks = &lstPacks;
+	pClient->SendPacket(CPacket(nCmd, pData, nLength, hEvent), *plstPacks);//plstPacks为输出参数
+	CloseHandle(hEvent);//回收事件句柄，防止资源耗尽
 	//接受服务端发送的应答包，并解包
-	int cmd = DealCommand();
- 	TRACE("ack:%d\r\n", cmd);
-	if (bAutoClose)
-		CloseSocket();
-	return cmd;
+	if (plstPacks->size() > 0) {
+		TRACE("%s start %lld \r\n", __FUNCTION__, GetTickCount64());
+		return plstPacks->front().sCmd;
+	}
+	TRACE("%s start %lld \r\n", __FUNCTION__, GetTickCount64());
+	return -1;
 }
 
 int CClientController::DownFile(CString strPath)
@@ -114,12 +125,18 @@ void CClientController::threadWatchScreen()
 	Sleep(50);
 	while (!m_isClose) {
 		if (m_watchDlg.isFull() == false) {
-			int ret = SendCommandPacket(6);
-			if (GetImage(m_remoteDlg.GetImage()) == 0) {
-				m_watchDlg.SetImageStatus(true);
-			}
-			else{
-				TRACE("获取图片失败！ret = %d\r\n", ret);
+			std::list<CPacket>lstPacks;
+			int ret = SendCommandPacket(6, true, NULL, 0, &lstPacks);
+			if (ret == 6) {
+				if ((CMyTool::Bytes2Image(m_watchDlg.GetImage(), lstPacks.front().strData)) == 0){
+				//if (GetImage(m_remoteDlg.GetImage()) == 0) {
+					m_watchDlg.SetImageStatus(true);
+					TRACE("成功设置图片 %08X\r\n", (HBITMAP)m_watchDlg.GetImage());
+					TRACE("和校验：%04X\r\n", lstPacks.front().sSum);
+				}
+				else {
+					TRACE("获取图片失败！ret = %d\r\n", ret);
+				}
 			}
 		}
 	}
@@ -218,19 +235,19 @@ void CClientController::threadFunc()
 	}
 }
 
-LRESULT CClientController::OnSendPack(UINT nMsg, WPARAM wParam, LPARAM lParam)
-{
-	CClientSockrt* pClient = CClientSockrt::getInstance();
-	CPacket* pPacket = (CPacket*)wParam;
-	return pClient->Send(*pPacket);
-}
-
-LRESULT CClientController::OnSendData(UINT nMsg, WPARAM wParam, LPARAM lParam)
-{
-	CClientSockrt* pClient = CClientSockrt::getInstance();
-	char* pBuffer = (char*)wParam;
-	return pClient->Send(pBuffer, (int)lParam);
-}
+//LRESULT CClientController::OnSendPack(UINT nMsg, WPARAM wParam, LPARAM lParam)
+//{
+//	CClientSockrt* pClient = CClientSockrt::getInstance();
+//	CPacket* pPacket = (CPacket*)wParam;
+//	return pClient->Send(*pPacket);
+//}
+//
+//LRESULT CClientController::OnSendData(UINT nMsg, WPARAM wParam, LPARAM lParam)
+//{
+//	CClientSockrt* pClient = CClientSockrt::getInstance();
+//	char* pBuffer = (char*)wParam;
+//	return pClient->Send(pBuffer, (int)lParam);
+//}
 
 LRESULT CClientController::OnShowStatus(UINT nMsg, WPARAM wParam, LPARAM lParam)
 {

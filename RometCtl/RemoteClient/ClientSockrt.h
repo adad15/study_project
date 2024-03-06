@@ -3,6 +3,9 @@
 #include "framework.h"
 #include <string>
 #include <vector>
+#include <list>
+#include <map>
+
 #define BUFFER_SIZE 2048000
 
 #pragma pack(push)//保存字节对齐的状态
@@ -19,9 +22,10 @@ public:
 		sCmd = pack.sCmd;
 		strData = pack.strData;
 		sSum = pack.sSum;
+		hEvent = pack.hEvent;
 	}
 	//打包数据
-	CPacket(WORD nCmd, const BYTE* pData, size_t nSize) {
+	CPacket(WORD nCmd, const BYTE* pData, size_t nSize, HANDLE hEvent) {
 		sHead = 0xFEFE;
 		nLength = nSize + 4;
 		sCmd = nCmd;
@@ -38,10 +42,11 @@ public:
 		for (size_t j{}; j < strData.size(); j++) {
 			sSum += BYTE(strData[j]) & 0xFF;
 		}
+		this->hEvent = hEvent;
 	}
 
 	//解析数据
-	CPacket(const BYTE* pData, size_t& nSize) {
+	CPacket(const BYTE* pData, size_t& nSize) :hEvent(INVALID_HANDLE_VALUE) {
 		//找包头
 		size_t i{};
 		for (; i < nSize; i++) {
@@ -86,6 +91,7 @@ public:
 			sCmd = pack.sCmd;
 			strData = pack.strData;
 			sSum = pack.sSum;
+			hEvent = pack.hEvent;
 		}
 		return *this;   //实现连等
 	}
@@ -109,7 +115,7 @@ public:
 	WORD sCmd;            //控制命令
 	std::string strData;  //包数据
 	WORD sSum;            //和校验，只检验包数据的长度
-	//std::string strOut;   //整个包的数据
+	HANDLE hEvent;
 };
 #pragma pack(pop)//还原字节对齐的状态
 
@@ -213,21 +219,13 @@ public:
 		}
 		return -1;
 	}
+	 
 	CPacket& GetPacket() {
 		return m_packet;
 	}
 
-	bool Send(const char* pData, int nSize) {
-		if (m_sock == -1) return false;
-		return send(m_sock, pData, nSize, 0) > 0;
-	}
-	bool Send(const CPacket& pack) { //不能常量引用，Data函数改变路pack的缓冲区
-		TRACE("m_sock = %d\r\n", m_sock);
-		if (m_sock == -1) return false;
-		std::string strout;
-		pack.Data(strout);
-		return send(m_sock, strout.c_str(), strout.size(), 0) > 0;
-	}
+	bool SendPacket(const CPacket& pack, std::list<CPacket>& lstPacks, bool isAutoClosed = true); 
+	
 	//将命令2解包后的类中的数据向外传递
 	bool GetFilePath(std::string& strPath) {
 		if ((m_packet.sCmd >= 2) && (m_packet.sCmd <= 4)) {
@@ -248,11 +246,18 @@ public:
 		m_sock = INVALID_SOCKET;
 	}
 	void UpdateAddress(int nIP, int nPort) {
-		m_nIP = nIP;
-		m_nPort = nPort;
+		if ((m_nIP != nIP) || (m_nPort != nPort)) {
+			m_nIP = nIP;
+			m_nPort = nPort;
+		}
 	}
 
 private:
+	bool m_bAutoClose;
+	std::map<HANDLE, bool>m_mapAutoClosed;
+	std::list<CPacket> m_lstSend;
+	//list<CPacket>是指对方应答的一系列的数据包
+	std::map<HANDLE, std::list<CPacket>> m_mapAck;
 	int m_nIP;//地址
 	int m_nPort;//端口
 	std::vector<char> m_buffer;
@@ -260,12 +265,13 @@ private:
 	CPacket m_packet;  //在CPacket类中必须要有复制构造函数
 	CClientSockrt& operator=(const CClientSockrt& ss) {}
 	CClientSockrt(const CClientSockrt& ss) {
+		m_bAutoClose = ss.m_bAutoClose;
 		m_sock = ss.m_sock;
 		m_nPort = ss.m_nPort;
 		m_nIP = ss.m_nIP;
 	}
 	CClientSockrt() :
-		m_nIP(INADDR_ANY), m_nPort(0){ 
+		m_nIP(INADDR_ANY), m_nPort(0), m_sock(INVALID_SOCKET), m_bAutoClose(true) {
 		//初始化套接字环境
 		if (InitSockEnv() == FALSE) {
 			MessageBox(NULL, _T("无法初始化套接字环境，请检查网络设置！"), _T("初始化错误！"), MB_OK | MB_ICONERROR);
@@ -274,11 +280,30 @@ private:
 
 		//缓冲区初始化
 		m_buffer.resize(BUFFER_SIZE);
+		memset(m_buffer.data(), 0, BUFFER_SIZE);
 	}
 	~CClientSockrt() {
 		closesocket(m_sock);
+		m_sock = INVALID_SOCKET;
 		WSACleanup(); //和WSAStartup一一对应
 	}
+	bool Send(const char* pData, int nSize) {
+		if (m_sock == -1) return false;
+		return send(m_sock, pData, nSize, 0) > 0;
+	}
+
+	bool Send(const CPacket& pack) { //不能常量引用，Data函数改变路pack的缓冲区
+		TRACE("m_sock = %d\r\n", m_sock);
+		if (m_sock == -1) return false;
+		std::string strout;
+		pack.Data(strout);
+		return send(m_sock, strout.c_str(), strout.size(), 0) > 0;
+	}
+
+	//线程函数
+	static void threadEntry(void* arg);
+	void threadFunc();
+
 	BOOL InitSockEnv() {
 		// 加载套接字库
 		WORD wVersionRequested;//用于指定程序请求的 Winsock 版本

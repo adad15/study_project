@@ -17,6 +17,7 @@ public:
 	enum { IDD = IDD_DLG_WATCH };
 #endif
 public:
+	CImage m_image;
 	int m_nObjWidth;
 	int m_nObjHeight;
 	bool isFull() const {
@@ -30,6 +31,9 @@ protected:
 	
 	DECLARE_MESSAGE_MAP()
 public:
+	CImage& GetImage() {
+		return m_image;
+	}
 	CPoint UserPointtoRemoteScreemPoint(CPoint& point, bool isScreen = false);
 	virtual BOOL OnInitDialog();
 	afx_msg void OnTimer(UINT_PTR nIDEvent);
