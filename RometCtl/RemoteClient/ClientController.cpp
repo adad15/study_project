@@ -68,7 +68,7 @@ int CClientController::SendCommandPacket(int nCmd, bool bAutoClose, BYTE* pData,
 	std::list<CPacket>lstPacks;//应答结果的包
 	if (plstPacks == NULL)
 		plstPacks = &lstPacks;
-	pClient->SendPacket(CPacket(nCmd, pData, nLength, hEvent), *plstPacks);//plstPacks为输出参数
+	pClient->SendPacket(CPacket(nCmd, pData, nLength, hEvent), *plstPacks, bAutoClose);//plstPacks为输出参数
 	CloseHandle(hEvent);//回收事件句柄，防止资源耗尽
 	//接受服务端发送的应答包，并解包
 	if (plstPacks->size() > 0) {
@@ -138,9 +138,13 @@ void CClientController::threadWatchScreen()
 					TRACE("获取图片失败！ret = %d\r\n", ret);
 				}
 			}
+			else {
+				TRACE("获取图片失败！ret = %d\r\n", ret);
+			}
 		}
+		Sleep(1);
 	}
-	Sleep(1);
+	TRACE("thread end %d\r\n", m_isClose);
 }
 
 void CClientController::threadEntryForWatchData(void* arg)

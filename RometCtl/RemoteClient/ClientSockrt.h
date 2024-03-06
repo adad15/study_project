@@ -5,6 +5,7 @@
 #include <vector>
 #include <list>
 #include <map>
+#include <mutex>
 
 #define BUFFER_SIZE 2048000
 
@@ -253,11 +254,13 @@ public:
 	}
 
 private:
+	HANDLE m_hThread;
 	bool m_bAutoClose;
+	std::mutex m_lock;
 	std::map<HANDLE, bool>m_mapAutoClosed;
 	std::list<CPacket> m_lstSend;
 	//list<CPacket>是指对方应答的一系列的数据包
-	std::map<HANDLE, std::list<CPacket>> m_mapAck;
+	std::map<HANDLE, std::list<CPacket>&> m_mapAck;
 	int m_nIP;//地址
 	int m_nPort;//端口
 	std::vector<char> m_buffer;
@@ -271,7 +274,7 @@ private:
 		m_nIP = ss.m_nIP;
 	}
 	CClientSockrt() :
-		m_nIP(INADDR_ANY), m_nPort(0), m_sock(INVALID_SOCKET), m_bAutoClose(true) {
+		m_nIP(INADDR_ANY), m_nPort(0), m_sock(INVALID_SOCKET), m_bAutoClose(true), m_hThread(INVALID_HANDLE_VALUE) {
 		//初始化套接字环境
 		if (InitSockEnv() == FALSE) {
 			MessageBox(NULL, _T("无法初始化套接字环境，请检查网络设置！"), _T("初始化错误！"), MB_OK | MB_ICONERROR);

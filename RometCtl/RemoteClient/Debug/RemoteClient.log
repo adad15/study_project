@@ -1,7 +1,11 @@
-﻿  CWatchDialog.cpp
-  ClientController.cpp
-  ClientSockrt.cpp
-  RemoteClient.cpp
-  RemoteClientDlg.cpp
-  正在生成代码...
-  RemoteClient.vcxproj -> D:\vs2022 code\RometClt\study_project\RometCtl\Debug\RemoteClient.exe
+﻿  ClientSockrt.cpp
+D:\vs2022 code\RometClt\study_project\RometCtl\RemoteClient\ClientSockrt.cpp(120,4): error C2660: “Sleep”: 函数不接受 0 个参数
+  (编译源文件“/ClientSockrt.cpp”)
+  C:\Program Files (x86)\Windows Kits\10\Include\10.0.22621.0\um\synchapi.h(684,1):
+  参见“Sleep”的声明
+  D:\vs2022 code\RometClt\study_project\RometCtl\RemoteClient\ClientSockrt.cpp(120,4):
+  尝试匹配参数列表“()”时
+  
+D:\vs2022 code\RometClt\study_project\RometCtl\RemoteClient\ClientSockrt.cpp(121,3): error C2143: 语法错误: 缺少“;”(在“}”的前面)
+  (编译源文件“/ClientSockrt.cpp”)
+  

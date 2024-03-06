@@ -201,15 +201,15 @@ void CRemoteClientDlg::OnBnClickedBtnTest()
 
 void CRemoteClientDlg::OnBnClickedBtnFileinfo()
 {
+	std::list<CPacket>lstPackets;
 	// TODO: 在此添加控件通知处理程序代码
-	int ret = CClientController::getInstance()->SendCommandPacket(1); //连接服务器,拿到磁盘信息，并解包
-	if (ret == -1) {
+	int ret = CClientController::getInstance()->SendCommandPacket(1, true, NULL, 0, &lstPackets); //连接服务器,拿到磁盘信息，并解包
+	if (ret == -1 || (lstPackets.size() <= 0)) {
 		AfxMessageBox(_T("命令处理失败!!!"));
 		return;
 	}
-
-	CClientSockrt* pClient = CClientSockrt::getInstance();
-	std::string drivers = pClient->GetPacket().strData;  //得到解包后的命令信息
+	CPacket& head = lstPackets.front();
+	std::string drivers = head.strData;  //得到解包后的命令信息
 	std::string dr;
 	//清理m_Tree控件
 	m_Tree.DeleteAllItems();
@@ -275,36 +275,27 @@ void CRemoteClientDlg::LoadFileInfo()
 	DeleteTreeChildItem(hTreeSelected);
 	m_List.DeleteAllItems();
 	CString strPath = GetPath(hTreeSelected);
-
-	int nCmd = CClientController::getInstance()->SendCommandPacket(2, false, (BYTE*)(LPCSTR)strPath, strPath.GetLength());
-	//拿到解包好的文件结构体指针
-	PFILEINFPO pInfp = (PFILEINFPO)CClientSockrt::getInstance()->GetPacket().strData.c_str();
-
-	while (pInfp->HasNext)
-	{
-		if (pInfp->IsDirectory) {
-			if (CString(pInfp->szFileName) == "." || CString(pInfp->szFileName) == "..") {
-				//如果是这两个那么不加入到树形菜单中，剩下的代码不变
-				int cmd = CClientController::getInstance()->DealCommand();   //不断接受路径包
-				TRACE("ack:%d\r\n", cmd);
-				if (cmd < 0) break;
-				pInfp = (PFILEINFPO)CClientSockrt::getInstance()->GetPacket().strData.c_str();
-				continue;
+	std::list<CPacket>lstPackets;
+	int nCmd = CClientController::getInstance()->SendCommandPacket(2, false,
+		(BYTE*)(LPCSTR)strPath, strPath.GetLength(), &lstPackets);
+	if (lstPackets.size() > 0) {
+		std::list<CPacket>::iterator it = lstPackets.begin();
+		for (; it != lstPackets.end(); it++) {
+			PFILEINFPO pInfp = (PFILEINFPO)(*it).strData.c_str();
+			if (pInfp->HasNext == FALSE)continue;
+			if (pInfp->IsDirectory) {
+				if (CString(pInfp->szFileName) == "." || CString(pInfp->szFileName) == "..") {
+					continue;
+				}
+				HTREEITEM hTemp = m_Tree.InsertItem(pInfp->szFileName, hTreeSelected, TVI_LAST);
+				//如果是目录，在节点的后面加上一个空的节点
+				m_Tree.InsertItem("", hTemp, TVI_LAST);
 			}
-			HTREEITEM hTemp = m_Tree.InsertItem(pInfp->szFileName, hTreeSelected, TVI_LAST);
-			//如果是目录，在节点的后面加上一个空的节点
-			m_Tree.InsertItem("", hTemp, TVI_LAST);
+			else {
+				m_List.InsertItem(0, pInfp->szFileName); //0是序号位置
+			}
 		}
-		else {
-			m_List.InsertItem(0, pInfp->szFileName); //0是序号位置
-		}
-		
-		int cmd = CClientController::getInstance()->DealCommand();   //不断接受路径包
-		TRACE("ack:%d\r\n", cmd);
-		if (cmd < 0) break;
-		pInfp = (PFILEINFPO)CClientSockrt::getInstance()->GetPacket().strData.c_str();
 	}
-	//CClientController::getInstance()->CloseSocket();
 }
 
 //文件删除后列表刷新函数
