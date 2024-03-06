@@ -82,6 +82,7 @@ void CClientSockrt::threadFunc()
 				std::map<HANDLE, bool>::iterator it0 = m_mapAutoClosed.find(head.hEvent);
 				do {
 					int length = recv(m_sock, pBuffer + index, BUFFER_SIZE - index, 0);
+					TRACE("recv %d %d\r\n", length, index);
 					if (length > 0 || index > 0) {
 						index += length;
 						size_t size = (size_t)index;//缓冲区的总长度
@@ -93,6 +94,7 @@ void CClientSockrt::threadFunc()
 							index -= size;
 							if (it0->second) {
 								SetEvent(head.hEvent);
+								break;
 							}
 						}
 						TRACE("index is %d\r\n", index);
