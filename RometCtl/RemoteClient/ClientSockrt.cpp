@@ -30,8 +30,11 @@ bool CClientSockrt::SendPacket(HWND hWnd, const CPacket& pack, bool isAutoClosed
 	std::string strOut;
 	pack.Data(strOut);
 	//PostThreadMessage是不会管投递的结果的，投递失败也不会做出反应，SendMessage是要消息应答以后才去结束
-	bool ret = PostThreadMessage(m_nThreadID, WM_SEND_PACK,
-		(WPARAM)new PACKET_DATA(strOut.c_str(), strOut.size(), nMode, wParam), (LPARAM)hWnd);
+	PACKET_DATA* pData = new PACKET_DATA(strOut.c_str(), strOut.size(), nMode, wParam);
+	bool ret = PostThreadMessage(m_nThreadID, WM_SEND_PACK, (WPARAM)pData, (LPARAM)hWnd);
+	if (ret == false) {
+		delete pData;//发送失败的情况在这里进行delete，发送成功的情况在对应的消息响应函数中进行处理。
+	}
 	return ret;
 }
 

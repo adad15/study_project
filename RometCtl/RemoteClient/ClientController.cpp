@@ -148,7 +148,7 @@ void CClientController::StartWatchScreen()
 {
 	m_isClose = false;
 	m_hThreadWatch= (HANDLE)_beginthread(&CClientController::threadEntryForWatchData, 0, this);
-	m_watchDlg.DoModal();
+	m_watchDlg.DoModal();//主线程阻塞在这里，所以只会开一个threadEntryForWatchData线程函数
 	m_isClose = true;
 	//这行代码等待之前创建的监控线程结束。WaitForSingleObject是一个同步函数，用于等待对象（这里是线程）进入信号状态或者超时。
 	//这里的500表示超时时间，单位是毫秒。如果线程在500毫秒内结束，函数将返回；
@@ -188,22 +188,20 @@ void CClientController::StartWatchScreen()
 void CClientController::threadWatchScreen()
 {
 	Sleep(50);
+	ULONGLONG nTick = GetTickCount64();
 	while (!m_isClose) {
 		if (m_watchDlg.isFull() == false) {
-			std::list<CPacket>lstPacks;
+			//图片发送不能太勤，服务端是单线程，一个命令一个命令的去相应
+			//延时太严重
+			if (GetTickCount64() - nTick < 200) {
+				Sleep(200 - DWORD(GetTickCount64() - nTick));
+			}//保证每次间隔200毫秒发送
+			nTick = GetTickCount64();
 			int ret = SendCommandPacket(m_watchDlg.GetSafeHwnd(), 6, true, NULL, 0);
 			//TODO 添加消息响应函数WM_SEND_PACK_ACK
 			//TODO 控制发送频率
-			if (ret == 6) {
-				if ((CMyTool::Bytes2Image(m_watchDlg.GetImage(), lstPacks.front().strData)) == 0) {
-					//if (GetImage(m_remoteDlg.GetImage()) == 0) {
-					m_watchDlg.SetImageStatus(true);
-					TRACE("成功设置图片 %08X\r\n", (HBITMAP)m_watchDlg.GetImage());
-					TRACE("和校验：%04X\r\n", lstPacks.front().sSum);
-				}
-				else {
-					TRACE("获取图片失败！ret = %d\r\n", ret);
-				}
+			if (ret == 1) {
+				TRACE("成功发送请求图片命令\r\n");
 			}
 			else {
 				TRACE("获取图片失败！ret = %d\r\n", ret);

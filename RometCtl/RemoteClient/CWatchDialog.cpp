@@ -118,38 +118,41 @@ LRESULT CWatchDialog::OnSendPackAck(WPARAM wParam, LPARAM lPrarm)
 
 	}
 	else{
-		CPacket* pPacket = (CPacket*)wParam;
-		if (pPacket != NULL) {
-			switch (pPacket->sCmd)
+		if (wParam != NULL) {
+			CPacket head = *(CPacket*)wParam;
+			delete (CPacket*)wParam; //1.只这样做还是会有内存泄漏，因为这只是收到的情况，还有没有收到数据包的情况
+			//2.还是会内存泄漏，这是因为服务器应答时CWatchDialog可能就关闭了，这样就没人来接受消息，所以没有调用delete
+			switch (head.sCmd)
 			{
 			case 6:
 			{
-				if (m_isFull) {
-					CMyTool::Bytes2Image(m_image, pPacket->strData);
-					//代替了OnTimer，收到一个图片就发送一个，就不需要计时器了。
-					CRect rect;
-					m_picture.GetWindowRect(rect);
 
-					m_nObjWidth = m_image.GetWidth();
-					m_nObjHeight = m_image.GetHeight();
+				CMyTool::Bytes2Image(m_image, head.strData);
+				//代替了OnTimer，收到一个图片就发送一个，就不需要计时器了。
+				CRect rect;
+				m_picture.GetWindowRect(rect);
 
-					//得到picture contol的Dc
-					//通过GetImage()方法获取父窗口中的图像
-					//使用BitBlt函数将该图像绘制到m_picture（一个界面控件）的设备上下文（DC）中
-					//SRCCOPY是复制的模式，表示进行直接复制。
-					//pParent->GetImage().BitBlt(m_picture.GetDC()->GetSafeHdc(), 0, 0, SRCCOPY);
-					m_image.StretchBlt(m_picture.GetDC()->GetSafeHdc(),
-						0, 0, rect.Width(), rect.Height(), SRCCOPY);
-					m_picture.InvalidateRect(NULL);
-					TRACE("更新图片完成%d %d %08X\r\n", m_nObjWidth, m_nObjHeight, (HBITMAP)m_image);
-					//调用GetImage()返回的图像对象的Destroy()方法，可能是为了释放与这个图像相关的资源。
-					m_image.Destroy();
-					//把m_isFull设置为false。
-					m_isFull = false;
-				}
-				break;
+				m_nObjWidth = m_image.GetWidth();
+				m_nObjHeight = m_image.GetHeight();
+
+				//得到picture contol的Dc
+				//通过GetImage()方法获取父窗口中的图像
+				//使用BitBlt函数将该图像绘制到m_picture（一个界面控件）的设备上下文（DC）中
+				//SRCCOPY是复制的模式，表示进行直接复制。
+				//pParent->GetImage().BitBlt(m_picture.GetDC()->GetSafeHdc(), 0, 0, SRCCOPY);
+				m_image.StretchBlt(m_picture.GetDC()->GetSafeHdc(),
+					0, 0, rect.Width(), rect.Height(), SRCCOPY);
+				m_picture.InvalidateRect(NULL);
+				TRACE("更新图片完成%d %d %08X\r\n", m_nObjWidth, m_nObjHeight, (HBITMAP)m_image);
+				//调用GetImage()返回的图像对象的Destroy()方法，可能是为了释放与这个图像相关的资源。
+				m_image.Destroy();
+				//把m_isFull设置为false。
+				m_isFull = false;
 			}
+				break;
 			case 5:
+				TRACE("远程端应答了鼠标操作");
+				break;
 			case 7:
 			case 8:
 			default:
