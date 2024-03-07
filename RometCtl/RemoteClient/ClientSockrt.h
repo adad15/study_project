@@ -8,6 +8,7 @@
 #include <mutex>
 
 #define BUFFER_SIZE 2048000
+#define  WM_SEND_PACK (WM_USER+1)
 
 #pragma pack(push)//保存字节对齐的状态
 #pragma pack(1)
@@ -254,6 +255,9 @@ public:
 	}
 
 private:
+	typedef void(CClientSockrt::* MSGFUNC)(UINT nMsg, WPARAM wParam, LPARAM lParam);
+	std::map<UINT, MSGFUNC>m_mapFunc;//消息映射表
+
 	HANDLE m_hThread;
 	bool m_bAutoClose;
 	std::mutex m_lock;
@@ -268,13 +272,29 @@ private:
 	CPacket m_packet;  //在CPacket类中必须要有复制构造函数
 	CClientSockrt& operator=(const CClientSockrt& ss) {}
 	CClientSockrt(const CClientSockrt& ss) {
+		m_hThread = ss.m_hThread;
+		m_mapFunc = ss.m_mapFunc;
 		m_bAutoClose = ss.m_bAutoClose;
 		m_sock = ss.m_sock;
 		m_nPort = ss.m_nPort;
 		m_nIP = ss.m_nIP;
 	}
 	CClientSockrt() :
-		m_nIP(INADDR_ANY), m_nPort(0), m_sock(INVALID_SOCKET), m_bAutoClose(true), m_hThread(INVALID_HANDLE_VALUE) {
+		m_nIP(INADDR_ANY), m_nPort(0), m_sock(INVALID_SOCKET), m_bAutoClose(true), 
+		m_hThread(INVALID_HANDLE_VALUE) {
+		struct {
+			UINT message;
+			MSGFUNC func;
+		}funcs[] = {
+			{WM_SEND_PACK,&CClientSockrt::SendPack},
+			{0,NULL}
+		};
+		for (int i{}; funcs[i].message != 0; i++) {
+			if (m_mapFunc.insert(std::pair<UINT, MSGFUNC>(funcs[i].message, funcs[i].func)).second == false) {
+				TRACE("插入失败，消息值：%d 函数值：%08X 序号：%d\r\n", funcs[i].message, funcs[i].func, i);
+			}
+		}
+
 		//初始化套接字环境
 		if (InitSockEnv() == FALSE) {
 			MessageBox(NULL, _T("无法初始化套接字环境，请检查网络设置！"), _T("初始化错误！"), MB_OK | MB_ICONERROR);
@@ -302,10 +322,15 @@ private:
 		pack.Data(strout);
 		return send(m_sock, strout.c_str(), strout.size(), 0) > 0;
 	}
-
+	//回调函数
+	void SendPack(UINT nMsg, WPARAM wParam/*缓冲区的值*/, LPARAM lParam/*缓冲区的长度*/);
 	//线程函数
 	static void threadEntry(void* arg);
+	//事件处理机制
 	void threadFunc();
+	//消息处理机制，和事件处理机制相比，动态加载
+	//单线程，不会进行数据同步
+	void threadFunc2();
 
 	BOOL InitSockEnv() {
 		// 加载套接字库

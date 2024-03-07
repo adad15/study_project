@@ -1,2 +1,7 @@
-﻿  ClientSockrt.cpp
+﻿  ClientController.cpp
+  ClientSockrt.cpp
+  CWatchDialog.cpp
+  RemoteClient.cpp
+  RemoteClientDlg.cpp
+  正在生成代码...
   RemoteClient.vcxproj -> D:\vs2022 code\RometClt\study_project\RometCtl\Debug\RemoteClient.exe
