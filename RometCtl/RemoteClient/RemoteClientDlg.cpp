@@ -195,7 +195,8 @@ HCURSOR CRemoteClientDlg::OnQueryDragIcon()
 
 void CRemoteClientDlg::OnBnClickedBtnTest()
 {
-	CClientController::getInstance()->SendCommandPacket(1981);
+	//CClientController::getInstance()->SendCommandPacket(1981);
+	CClientController::getInstance()->SendCommandPacket(GetSafeHwnd(),1981);
 }
 
 
@@ -203,7 +204,8 @@ void CRemoteClientDlg::OnBnClickedBtnFileinfo()
 {
 	std::list<CPacket>lstPackets;
 	// TODO: 在此添加控件通知处理程序代码
-	int ret = CClientController::getInstance()->SendCommandPacket(1, true, NULL, 0, &lstPackets); //连接服务器,拿到磁盘信息，并解包
+	//int ret = CClientController::getInstance()->SendCommandPacket(1, true, NULL, 0, &lstPackets); //连接服务器,拿到磁盘信息，并解包
+	int ret = CClientController::getInstance()->SendCommandPacket(GetSafeHwnd(), 1, true, NULL, 0); //消息处理机制
 	if (ret == -1 || (lstPackets.size() <= 0)) {
 		AfxMessageBox(_T("命令处理失败!!!"));
 		return;
@@ -276,8 +278,10 @@ void CRemoteClientDlg::LoadFileInfo()
 	m_List.DeleteAllItems();
 	CString strPath = GetPath(hTreeSelected);
 	std::list<CPacket>lstPackets;
-	int nCmd = CClientController::getInstance()->SendCommandPacket(2, false,
-		(BYTE*)(LPCSTR)strPath, strPath.GetLength(), &lstPackets);
+	/*int nCmd = CClientController::getInstance()->SendCommandPacket(2, false,
+		(BYTE*)(LPCSTR)strPath, strPath.GetLength(), &lstPackets);*/
+	int nCmd = CClientController::getInstance()->SendCommandPacket(GetSafeHwnd(), 2, false,
+		(BYTE*)(LPCSTR)strPath, strPath.GetLength());//消息响应机制
 	if (lstPackets.size() > 0) {
 		TRACE("lstPackets.size = %d\r\n", lstPackets.size()); 
 		std::list<CPacket>::iterator it = lstPackets.begin();
@@ -309,7 +313,8 @@ void CRemoteClientDlg::LoadFileCurrent()
 	//只删除文件夹就行了
 	m_List.DeleteAllItems();
 
-	int nCmd = CClientController::getInstance()->SendCommandPacket(2, false, (BYTE*)(LPCSTR)strPath, strPath.GetLength());
+	//int nCmd = CClientController::getInstance()->SendCommandPacket(2, false, (BYTE*)(LPCSTR)strPath, strPath.GetLength());
+	int nCmd = CClientController::getInstance()->SendCommandPacket(GetSafeHwnd(), 2, false, (BYTE*)(LPCSTR)strPath);//消息机制
 	//拿到解包好的文件结构体指针
 	PFILEINFPO pInfp = (PFILEINFPO)CClientSockrt::getInstance()->GetPacket().strData.c_str();
 
@@ -394,7 +399,8 @@ void CRemoteClientDlg::OnDeleteFile()
 	int nSelected = m_List.GetSelectionMark();
 	CString strFile = m_List.GetItemText(nSelected, 0);
 	strFile = strPath + strFile;
-	int ret = CClientController::getInstance()->SendCommandPacket(9, true, (BYTE*)(LPCTSTR)strFile, strFile.GetLength());
+	//int ret = CClientController::getInstance()->SendCommandPacket(9, true, (BYTE*)(LPCTSTR)strFile, strFile.GetLength());
+	int ret = CClientController::getInstance()->SendCommandPacket(GetSafeHwnd(), 9, true, (BYTE*)(LPCTSTR)strFile, strFile.GetLength());//消息机制
 	if (ret < 0) {
 		AfxMessageBox("删除文件命令执行失败！！");
 	}
@@ -409,7 +415,8 @@ void CRemoteClientDlg::OnRunFile()
 	int nSelected = m_List.GetSelectionMark();
 	CString strFile = m_List.GetItemText(nSelected, 0);
 	strFile = strPath + strFile;
-	int ret = CClientController::getInstance()->SendCommandPacket(3, true, (BYTE*)(LPCTSTR)strFile, strFile.GetLength());
+	//int ret = CClientController::getInstance()->SendCommandPacket(3, true, (BYTE*)(LPCTSTR)strFile, strFile.GetLength());
+	int ret = CClientController::getInstance()->SendCommandPacket(GetSafeHwnd(), 3, true, (BYTE*)(LPCTSTR)strFile, strFile.GetLength());//消息机制
 	if (ret < 0) {
 		AfxMessageBox("打开文件命令执行失败！！");
 	}

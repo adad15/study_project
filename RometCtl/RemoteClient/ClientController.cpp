@@ -55,29 +55,43 @@ LRESULT CClientController::SendMessage(MSG msg)
 	return info.result;
 }
 
-int CClientController::SendCommandPacket(int nCmd, bool bAutoClose, BYTE* pData,
-	size_t nLength, std::list<CPacket>* plstPacks)//plstPacks = null 表示不关心应答
+//消息响应机制下的SendCommandPacket函数
+bool CClientController::SendCommandPacket(HWND hWnd, int nCmd, bool bAutoClose, BYTE* pData, size_t nLength)
 {
 	TRACE("%s start %lld \r\n", __FUNCTION__, GetTickCount64());
 	//发送封装好的数据包
 	CClientSockrt* pClient = CClientSockrt::getInstance();
-	/*if (pClient->InitSocket() == false) return false;*/
-	HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
-	
-	//不应该直接发送，而是投入队列。
-	std::list<CPacket>lstPacks;//应答结果的包
-	if (plstPacks == NULL)
-		plstPacks = &lstPacks;
-	pClient->SendPacket(CPacket(nCmd, pData, nLength, hEvent), *plstPacks, bAutoClose);//plstPacks为输出参数
-	CloseHandle(hEvent);//回收事件句柄，防止资源耗尽
-	//接受服务端发送的应答包，并解包
-	if (plstPacks->size() > 0) {
-		TRACE("%s start %lld \r\n", __FUNCTION__, GetTickCount64());
-		return plstPacks->front().sCmd;
-	}
-	TRACE("%s start %lld \r\n", __FUNCTION__, GetTickCount64());
-	return -1;
+
+	return pClient->SendPacket(hWnd, CPacket(nCmd, pData, nLength), bAutoClose);//plstPacks为输出参数
 }
+
+
+
+//事件响应机制下的SendCommandPacket函数
+// 
+// int CClientController::SendCommandPacket(int nCmd, bool bAutoClose, BYTE* pData,
+// 	size_t nLength, std::list<CPacket>* plstPacks)//plstPacks = null 表示不关心应答
+// {
+// 	TRACE("%s start %lld \r\n", __FUNCTION__, GetTickCount64());
+// 	//发送封装好的数据包
+// 	CClientSockrt* pClient = CClientSockrt::getInstance();
+// 	/*if (pClient->InitSocket() == false) return false;*/
+// 	HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+// 	
+// 	//不应该直接发送，而是投入队列。
+// 	std::list<CPacket>lstPacks;//应答结果的包
+// 	if (plstPacks == NULL)
+// 		plstPacks = &lstPacks;
+// 	pClient->SendPacket(CPacket(nCmd, pData, nLength, hEvent), *plstPacks, bAutoClose);//plstPacks为输出参数
+// 	CloseHandle(hEvent);//回收事件句柄，防止资源耗尽
+// 	//接受服务端发送的应答包，并解包
+// 	if (plstPacks->size() > 0) {
+// 		TRACE("%s start %lld \r\n", __FUNCTION__, GetTickCount64());
+// 		return plstPacks->front().sCmd;
+// 	}
+// 	TRACE("%s start %lld \r\n", __FUNCTION__, GetTickCount64());
+// 	return -1;
+// }
 
 int CClientController::DownFile(CString strPath)
 {
@@ -119,17 +133,48 @@ void CClientController::StartWatchScreen()
 	//如果500毫秒内线程没有结束，函数也会返回，但线程可能仍然在运行。
 	WaitForSingleObject(m_hThreadWatch, 500);
 }
+//事件机制下的threadWatchScreen处理函数
+// 
+// void CClientController::threadWatchScreen()
+// {
+// 	Sleep(50);
+// 	while (!m_isClose) {
+// 		if (m_watchDlg.isFull() == false) {
+// 			std::list<CPacket>lstPacks;
+// 			int ret = SendCommandPacket(6, true, NULL, 0, &lstPacks);
+// 			if (ret == 6) {
+// 				if ((CMyTool::Bytes2Image(m_watchDlg.GetImage(), lstPacks.front().strData)) == 0){
+// 				//if (GetImage(m_remoteDlg.GetImage()) == 0) {
+// 					m_watchDlg.SetImageStatus(true);
+// 					TRACE("成功设置图片 %08X\r\n", (HBITMAP)m_watchDlg.GetImage());
+// 					TRACE("和校验：%04X\r\n", lstPacks.front().sSum);
+// 				}
+// 				else {
+// 					TRACE("获取图片失败！ret = %d\r\n", ret);
+// 				}
+// 			}
+// 			else {
+// 				TRACE("获取图片失败！ret = %d\r\n", ret);
+// 			}
+// 		}
+// 		Sleep(1);
+// 	}
+// 	TRACE("thread end %d\r\n", m_isClose);
+// }
 
+//消息机制下的threadWatchScreen处理函数
 void CClientController::threadWatchScreen()
 {
 	Sleep(50);
 	while (!m_isClose) {
 		if (m_watchDlg.isFull() == false) {
 			std::list<CPacket>lstPacks;
-			int ret = SendCommandPacket(6, true, NULL, 0, &lstPacks);
+			int ret = SendCommandPacket(m_watchDlg.GetSafeHwnd(), 6, true, NULL, 0);
+			//TODO 添加消息响应函数WM_SEND_PACK_ACK
+			//TODO 控制发送频率
 			if (ret == 6) {
-				if ((CMyTool::Bytes2Image(m_watchDlg.GetImage(), lstPacks.front().strData)) == 0){
-				//if (GetImage(m_remoteDlg.GetImage()) == 0) {
+				if ((CMyTool::Bytes2Image(m_watchDlg.GetImage(), lstPacks.front().strData)) == 0) {
+					//if (GetImage(m_remoteDlg.GetImage()) == 0) {
 					m_watchDlg.SetImageStatus(true);
 					TRACE("成功设置图片 %08X\r\n", (HBITMAP)m_watchDlg.GetImage());
 					TRACE("和校验：%04X\r\n", lstPacks.front().sSum);
@@ -166,7 +211,8 @@ void CClientController::threadDownloadFile()
 	CClientSockrt* pClient = CClientSockrt::getInstance();
 	do 
 	{
-		int ret = SendCommandPacket(4, false, (BYTE*)(LPCSTR)m_strRemote, m_strRemote.GetLength());
+		//int ret = SendCommandPacket(4, false, (BYTE*)(LPCSTR)m_strRemote, m_strRemote.GetLength()); 
+		int ret = SendCommandPacket(m_remoteDlg, 4, false, (BYTE*)(LPCSTR)m_strRemote, m_strRemote.GetLength());//消息机制
 		
 		long long nLength = *(long long*)pClient->GetPacket().strData.c_str();//得到第一个数据包储存的文件长度
 		if (nLength == 0) {

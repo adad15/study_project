@@ -28,7 +28,7 @@ private:
 	CString GetPath(HTREEITEM hTree);
 	void DeleteTreeChildItem(HTREEITEM hTree);
 	
-	int SendCommandPacket(int nCmd, bool bAutoClose = true, BYTE* pData = NULL, size_t nLength = 0);
+	//int SendCommandPacket(int nCmd, bool bAutoClose = true, BYTE* pData = NULL, size_t nLength = 0);
 // 实现
 protected:
 	HICON m_hIcon;

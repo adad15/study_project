@@ -1,6 +1,6 @@
-﻿  ClientController.cpp
+﻿  CWatchDialog.cpp
+  ClientController.cpp
   ClientSockrt.cpp
-  CWatchDialog.cpp
   RemoteClient.cpp
   RemoteClientDlg.cpp
   正在生成代码...

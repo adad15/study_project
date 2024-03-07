@@ -8,12 +8,11 @@
 #include <mutex>
 
 #define BUFFER_SIZE 2048000
-#define  WM_SEND_PACK (WM_USER+1)
+#define  WM_SEND_PACK (WM_USER+1)//发送包数据
+#define  WM_SEND_PACK_ACK (WM_USER+2)//发送包数据应答
 
 #pragma pack(push)//保存字节对齐的状态
 #pragma pack(1)
-
-void Dump(BYTE* pData, size_t nSize);
 
 class CPacket {
 public:
@@ -24,10 +23,11 @@ public:
 		sCmd = pack.sCmd;
 		strData = pack.strData;
 		sSum = pack.sSum;
-		hEvent = pack.hEvent;
+		//hEvent = pack.hEvent;  //消息响应机制去除hEvent
 	}
 	//打包数据
-	CPacket(WORD nCmd, const BYTE* pData, size_t nSize, HANDLE hEvent) {
+	//CPacket(WORD nCmd, const BYTE* pData, size_t nSize, HANDLE hEvent) {  //事件响应机制下的CPacket打包函数
+	CPacket(WORD nCmd, const BYTE* pData, size_t nSize) {//消息响应机制下的CPacket打包函数
 		sHead = 0xFEFE;
 		nLength = nSize + 4;
 		sCmd = nCmd;
@@ -44,11 +44,12 @@ public:
 		for (size_t j{}; j < strData.size(); j++) {
 			sSum += BYTE(strData[j]) & 0xFF;
 		}
-		this->hEvent = hEvent;
+		//this->hEvent = hEvent;
 	}
 
 	//解析数据
-	CPacket(const BYTE* pData, size_t& nSize) :hEvent(INVALID_HANDLE_VALUE) {
+	CPacket(const BYTE* pData, size_t& nSize) //:hEvent(INVALID_HANDLE_VALUE) //消息响应机制去除hEvent
+	{
 		//找包头
 		size_t i{};
 		for (; i < nSize; i++) {
@@ -93,7 +94,7 @@ public:
 			sCmd = pack.sCmd;
 			strData = pack.strData;
 			sSum = pack.sSum;
-			hEvent = pack.hEvent;
+			//hEvent = pack.hEvent; //消息响应机制去除hEvent
 		}
 		return *this;   //实现连等
 	}
@@ -117,7 +118,7 @@ public:
 	WORD sCmd;            //控制命令
 	std::string strData;  //包数据
 	WORD sSum;            //和校验，只检验包数据的长度
-	HANDLE hEvent;
+	//HANDLE hEvent;   //消息响应机制去除hEvent
 };
 #pragma pack(pop)//还原字节对齐的状态
 
@@ -148,7 +149,32 @@ typedef struct file_info {
 	char szFileName[256];//文件名
 }FILEINFPO, * PFILEINFPO;
 
-//connect函数错误码处理函数
+typedef struct PacketData {
+	std::string strData;
+	UINT nMode;
+	PacketData(const char* pData, size_t nLen, UINT mode) {
+		strData.resize(nLen);
+		memcpy((char*)strData.c_str(), pData, nLen);
+		nMode = mode;
+	}
+	PacketData(const PacketData& data) {
+		strData = data.strData;
+		nMode = data.nMode;
+	}
+	PacketData& operator=(const PacketData& data) {
+		if (this != &data) {
+			strData = data.strData;
+			nMode = data.nMode;
+		}
+		return *this;
+	}
+}PACKET_DATA;
+
+enum {
+	CSM_AUTOCLOSE = 1,//CSM = Client Socket Mode 自动关闭模式
+};
+
+//connect 函数错误码处理函数
 std::string GetErrorInfo(int wsaErrCode);
 
 class CClientSockrt
@@ -226,8 +252,11 @@ public:
 		return m_packet;
 	}
 
-	bool SendPacket(const CPacket& pack, std::list<CPacket>& lstPacks, bool isAutoClosed = true); 
-	
+	//事件机制下的SendPacket函数
+	//bool SendPacket(const CPacket& pack, std::list<CPacket>& lstPacks, bool isAutoClosed = true); 
+	//消息机制下的SendPacket函数
+	bool SendPacket(HWND hWnd, const CPacket& pack, bool isAutoClosed = true);
+
 	//将命令2解包后的类中的数据向外传递
 	bool GetFilePath(std::string& strPath) {
 		if ((m_packet.sCmd >= 2) && (m_packet.sCmd <= 4)) {
@@ -255,6 +284,7 @@ public:
 	}
 
 private:
+	UINT m_nThreadID;
 	typedef void(CClientSockrt::* MSGFUNC)(UINT nMsg, WPARAM wParam, LPARAM lParam);
 	std::map<UINT, MSGFUNC>m_mapFunc;//消息映射表
 
@@ -273,15 +303,29 @@ private:
 	CClientSockrt& operator=(const CClientSockrt& ss) {}
 	CClientSockrt(const CClientSockrt& ss) {
 		m_hThread = ss.m_hThread;
-		m_mapFunc = ss.m_mapFunc;
 		m_bAutoClose = ss.m_bAutoClose;
 		m_sock = ss.m_sock;
 		m_nPort = ss.m_nPort;
 		m_nIP = ss.m_nIP;
+		std::map<UINT, CClientSockrt::MSGFUNC>::const_iterator it = ss.m_mapFunc.begin();
+		for (; it != ss.m_mapFunc.end(); it++) {
+			m_mapFunc.insert(std::pair<UINT, MSGFUNC>(it->first, it->second));
+		}
 	}
 	CClientSockrt() :
 		m_nIP(INADDR_ANY), m_nPort(0), m_sock(INVALID_SOCKET), m_bAutoClose(true), 
 		m_hThread(INVALID_HANDLE_VALUE) {
+
+		//初始化套接字环境
+		if (InitSockEnv() == FALSE) {
+			MessageBox(NULL, _T("无法初始化套接字环境，请检查网络设置！"), _T("初始化错误！"), MB_OK | MB_ICONERROR);
+			exit(0);
+		}
+
+		//缓冲区初始化
+		m_buffer.resize(BUFFER_SIZE);
+		memset(m_buffer.data(), 0, BUFFER_SIZE);
+
 		struct {
 			UINT message;
 			MSGFUNC func;
@@ -294,16 +338,6 @@ private:
 				TRACE("插入失败，消息值：%d 函数值：%08X 序号：%d\r\n", funcs[i].message, funcs[i].func, i);
 			}
 		}
-
-		//初始化套接字环境
-		if (InitSockEnv() == FALSE) {
-			MessageBox(NULL, _T("无法初始化套接字环境，请检查网络设置！"), _T("初始化错误！"), MB_OK | MB_ICONERROR);
-			exit(0);
-		}
-
-		//缓冲区初始化
-		m_buffer.resize(BUFFER_SIZE);
-		memset(m_buffer.data(), 0, BUFFER_SIZE);
 	}
 	~CClientSockrt() {
 		closesocket(m_sock);
@@ -325,9 +359,10 @@ private:
 	//回调函数
 	void SendPack(UINT nMsg, WPARAM wParam/*缓冲区的值*/, LPARAM lParam/*缓冲区的长度*/);
 	//线程函数
-	static void threadEntry(void* arg);
+	//static void threadEntry(void* arg);//事件处理机制
+	static unsigned __stdcall threadEntry(void* arg);
 	//事件处理机制
-	void threadFunc();
+	//void threadFunc();
 	//消息处理机制，和事件处理机制相比，动态加载
 	//单线程，不会进行数据同步
 	void threadFunc2();
