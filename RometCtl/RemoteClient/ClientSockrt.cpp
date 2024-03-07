@@ -75,6 +75,8 @@ void CClientSockrt::SendPack(UINT nMsg, WPARAM wParam/*消息结构体*/, LPARAM lPar
 	PACKET_DATA data = *(PACKET_DATA*)wParam;
 	delete (PACKET_DATA*)wParam;
 	HWND hWnd = (HWND)lParam; //窗口句柄
+	size_t nTemp = data.strData.size();
+	CPacket current((BYTE*)data.strData.c_str(), nTemp);//解码
 
 	if (InitSocket() == true) {
 		
@@ -93,18 +95,21 @@ void CClientSockrt::SendPack(UINT nMsg, WPARAM wParam/*消息结构体*/, LPARAM lPar
 					//解包
 					CPacket pack((BYTE*)pBuffer, nLen);
 					if (nLen > 0) {
+						TRACE("ack pack %d to hWnd %08X %d %d\r\n", pack.sCmd, hWnd, index, nLen);
+						TRACE("%04X\r\n", *(WORD*)(pBuffer + nLen));
 						::SendMessage(hWnd, WM_SEND_PACK_ACK, (WPARAM)new CPacket(pack), data.wParam);
 						if (data.nMode & CSM_AUTOCLOSE) {//看是不是设置了CSM_AUTOCLOSE自动关闭，设置就执行括号里代码
 							CloseSocket();
 							return;
 						}
+						index -= nLen;
+						memmove(pBuffer, pBuffer + nLen, index);
 					}
-					index -= nLen;
-					memmove(pBuffer, pBuffer + index, nLen);
 				}
 				else {//TODO 对方关闭了套接字，或者网络设备异常
+					TRACE("recv failed length %d index %d\r\n", length, index);
 					CloseSocket();
-					::SendMessage(hWnd, WM_SEND_PACK_ACK, NULL, 1);
+					::SendMessage(hWnd, WM_SEND_PACK_ACK, (WPARAM)new CPacket(current.sCmd, NULL, 0), 1);
 				}
 			}
 		}
@@ -117,7 +122,6 @@ void CClientSockrt::SendPack(UINT nMsg, WPARAM wParam/*消息结构体*/, LPARAM lPar
 	else {
 		//TODO 错误处理
 		::SendMessage(hWnd, WM_SEND_PACK_ACK, NULL, -2);
-
 	}
 }
 

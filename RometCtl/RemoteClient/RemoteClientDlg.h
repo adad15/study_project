@@ -23,9 +23,9 @@ public:
 
 protected:
 	virtual void DoDataExchange(CDataExchange* pDX);	// DDX/DDV 支持
-	
-private:	
+public:
 	void LoadFileInfo();
+private:	
 	void LoadFileCurrent();
 	CString GetPath(HTREEITEM hTree);
 	void DeleteTreeChildItem(HTREEITEM hTree);

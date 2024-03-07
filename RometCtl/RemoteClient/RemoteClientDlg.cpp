@@ -256,30 +256,11 @@ void CRemoteClientDlg::LoadFileInfo()
 	DeleteTreeChildItem(hTreeSelected);
 	m_List.DeleteAllItems();
 	CString strPath = GetPath(hTreeSelected);
-	std::list<CPacket>lstPackets;
 	/*int nCmd = CClientController::getInstance()->SendCommandPacket(2, false,
 		(BYTE*)(LPCSTR)strPath, strPath.GetLength(), &lstPackets);*/
-	int nCmd = CClientController::getInstance()->SendCommandPacket(GetSafeHwnd(), 2, false,
+	TRACE("hTreeSelected %08X\r\n", hTreeSelected);
+	CClientController::getInstance()->SendCommandPacket(GetSafeHwnd(), 2, false,
 		(BYTE*)(LPCSTR)strPath, strPath.GetLength(), (WPARAM)hTreeSelected);//消息响应机制
-	if (lstPackets.size() > 0) {
-		TRACE("lstPackets.size = %d\r\n", lstPackets.size()); 
-		std::list<CPacket>::iterator it = lstPackets.begin();
-		for (; it != lstPackets.end(); it++) {
-			PFILEINFPO pInfp = (PFILEINFPO)(*it).strData.c_str();
-			if (pInfp->HasNext == FALSE)continue;
-			if (pInfp->IsDirectory) {
-				if (CString(pInfp->szFileName) == "." || CString(pInfp->szFileName) == "..") {
-					continue;
-				}
-				HTREEITEM hTemp = m_Tree.InsertItem(pInfp->szFileName, hTreeSelected, TVI_LAST);
-				//如果是目录，在节点的后面加上一个空的节点
-				m_Tree.InsertItem("", hTemp, TVI_LAST);
-			}
-			else {
-				m_List.InsertItem(0, pInfp->szFileName); //0是序号位置
-			}
-		}
-	}
 }
 
 //文件删除后列表刷新函数
@@ -474,14 +455,18 @@ LRESULT CRemoteClientDlg::OnSendPackAck(WPARAM wParam, LPARAM lPrarm)
 			case 2://获取文件信息
 			{
 				PFILEINFPO pInfp = (PFILEINFPO)head.strData.c_str();
+				TRACE("hasnext %d isdirectory %d %s\r\n", pInfp->HasNext, pInfp->IsDirectory, pInfp->szFileName);
 				if (pInfp->HasNext == FALSE)break;
 				if (pInfp->IsDirectory) {
 					if (CString(pInfp->szFileName) == "." || CString(pInfp->szFileName) == "..") {
 						break;
 					}
+					TRACE("hselected %08X %08X\r\n", lPrarm, m_Tree.GetSelectedItem());
 					HTREEITEM hTemp = m_Tree.InsertItem(pInfp->szFileName, (HTREEITEM)lPrarm, TVI_LAST);
 					//如果是目录，在节点的后面加上一个空的节点
 					m_Tree.InsertItem("", hTemp, TVI_LAST);
+					//要展开
+					m_Tree.Expand((HTREEITEM)lPrarm, TVE_EXPAND);
 				}
 				else {
 					m_List.InsertItem(0, pInfp->szFileName); //0是序号位置
@@ -492,6 +477,7 @@ LRESULT CRemoteClientDlg::OnSendPackAck(WPARAM wParam, LPARAM lPrarm)
 			{
 				//不需要循环，因为每次只处理一个包，会收到多个消息，以此变相相当于循环。
 				static LONGLONG length = 0, index = 0;
+				TRACE("length %d index %d\r\n", length, index);
 				if (length == 0) {
 					length = *(long long*)head.strData.c_str();//得到第一个数据包储存的文件长度
 					if (length == 0) {
@@ -511,6 +497,14 @@ LRESULT CRemoteClientDlg::OnSendPackAck(WPARAM wParam, LPARAM lPrarm)
 					//返回的是成功写入的字节数，所以每次写入一字节，最后返回值就是写入的字节数。
 					fwrite(head.strData.c_str(), 1, head.strData.size(), pFile);
 					index += head.strData.size();
+					
+					//？？？我写的程序不需要这个，是因为服务器在发送完文件之后，会发一个空包？？？？？？
+					/*if (index >= length) {
+						fclose((FILE*)lPrarm);
+						length = 0;
+						index = 0;
+						CClientController::getInstance()->DownloadEnd();
+					}*/
 				}
 			}
 				break;
