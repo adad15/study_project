@@ -25,7 +25,7 @@ std::string GetErrorInfo(int wsaErrCode) {
 }
 
 //消息机制下的SendPacket函数
-bool CClientSockrt::SendPacket(HWND hWnd, const CPacket& pack, bool isAutoClosed) {
+bool CClientSockrt::SendPacket(HWND hWnd, const CPacket& pack, bool isAutoClosed, WPARAM wParam) {
 	if (m_hThread == INVALID_HANDLE_VALUE) {
 		m_hThread = (HANDLE)_beginthreadex(NULL, 0, &CClientSockrt::threadEntry, this, 0, &m_nThreadID);
 	}
@@ -33,7 +33,7 @@ bool CClientSockrt::SendPacket(HWND hWnd, const CPacket& pack, bool isAutoClosed
 	std::string strOut;
 	pack.Data(strOut);
 	return PostThreadMessage(m_nThreadID, WM_SEND_PACK,
-		(WPARAM)new PACKET_DATA(strOut.c_str(), strOut.size(), nMode), (LPARAM)hWnd);
+		(WPARAM)new PACKET_DATA(strOut.c_str(), strOut.size(), nMode, wParam), (LPARAM)hWnd);
 }
 
 //事件机制下的SendPacket函数
@@ -91,7 +91,7 @@ void CClientSockrt::SendPack(UINT nMsg, WPARAM wParam/*消息结构体*/, LPARAM lPar
 					//解包
 					CPacket pack((BYTE*)pBuffer, nLen);
 					if (nLen > 0) {
-						::SendMessage(hWnd, WM_SEND_PACK_ACK, (WPARAM)new CPacket(pack), 0);
+						::SendMessage(hWnd, WM_SEND_PACK_ACK, (WPARAM)new CPacket(pack), data.wParam);
 						if (data.nMode & CSM_AUTOCLOSE) {//看是不是设置了CSM_AUTOCLOSE自动关闭，设置就执行括号里代码
 							CloseSocket();
 							return;

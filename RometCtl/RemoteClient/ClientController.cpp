@@ -56,13 +56,13 @@ LRESULT CClientController::SendMessage(MSG msg)
 }
 
 //消息响应机制下的SendCommandPacket函数
-bool CClientController::SendCommandPacket(HWND hWnd, int nCmd, bool bAutoClose, BYTE* pData, size_t nLength)
+bool CClientController::SendCommandPacket(HWND hWnd, int nCmd, bool bAutoClose, BYTE* pData, size_t nLength, WPARAM wParam)
 {
 	TRACE("%s start %lld \r\n", __FUNCTION__, GetTickCount64());
 	//发送封装好的数据包
 	CClientSockrt* pClient = CClientSockrt::getInstance();
 
-	return pClient->SendPacket(hWnd, CPacket(nCmd, pData, nLength), bAutoClose);//plstPacks为输出参数
+	return pClient->SendPacket(hWnd, CPacket(nCmd, pData, nLength), bAutoClose, wParam);//plstPacks为输出参数
 }
 
 
@@ -93,6 +93,13 @@ bool CClientController::SendCommandPacket(HWND hWnd, int nCmd, bool bAutoClose, 
 // 	return -1;
 // }
 
+void CClientController::DownloadEnd()
+{
+	m_statusDlg.ShowWindow(SW_HIDE);
+	m_remoteDlg.EndWaitCursor();
+	m_remoteDlg.MessageBox(_T("下载完成！！"), _T("完成"));
+}
+
 int CClientController::DownFile(CString strPath)
 {
 	CFileDialog dlg(FALSE, "*",
@@ -102,15 +109,21 @@ int CClientController::DownFile(CString strPath)
 	if (dlg.DoModal() == IDOK) {
 		m_strRemote = strPath;//拿到远程地址
 		m_strLocal = dlg.GetPathName();//本地保存地址
+		FILE* pFile = fopen(m_strLocal, "wb+");
+		if (pFile == NULL) {
+			AfxMessageBox(_T("本地没有权限保存该文件，或者文件无法创建！！！"));
+			return -1;
+		}
 		//开启一个新线程,处理文件
 		//第二个参数 0 指的是新线程的堆栈大小。当设置为 0 时，表示使用默认的堆栈大小。堆栈大小可以影响到线程能够使用的局部变量的数量和大小。
 		//第三个参数 this 指向当前的 CRemoteClientDlg 实例。这个参数被传递给 threadEntryForDownFile 函数，允许该函数访问类的成员变量和函数。
-		m_hThreadDownload = (HANDLE)_beginthread(&CClientController::threadDownloadEntry, 0, this);
+		//m_hThreadDownload = (HANDLE)_beginthread(&CClientController::threadDownloadEntry, 0, this);
 		//主线程弹出子窗口
-		if (WaitForSingleObject(m_hThreadDownload, 0) != WAIT_TIMEOUT) {//判断线程是的正确启动，线程启动时等待时间为0，必然等待超时
-			return -1;
-		}
+		//if (WaitForSingleObject(m_hThreadDownload, 0) != WAIT_TIMEOUT) {//判断线程是的正确启动，线程启动时等待时间为0，必然等待超时
+		//	return -1;
+		//}
 
+		SendCommandPacket(m_remoteDlg, 4, false, (BYTE*)(LPCSTR)m_strRemote, m_strRemote.GetLength(), (WPARAM)pFile);//消息机制
 		m_statusDlg.BeginWaitCursor();//光标设置为等待沙漏的状态
 		m_statusDlg.m_info.SetWindowText(_T("命令正在执行中！"));
 		//显示窗口
@@ -212,7 +225,7 @@ void CClientController::threadDownloadFile()
 	do 
 	{
 		//int ret = SendCommandPacket(4, false, (BYTE*)(LPCSTR)m_strRemote, m_strRemote.GetLength()); 
-		int ret = SendCommandPacket(m_remoteDlg, 4, false, (BYTE*)(LPCSTR)m_strRemote, m_strRemote.GetLength());//消息机制
+		int ret = SendCommandPacket(m_remoteDlg, 4, false, (BYTE*)(LPCSTR)m_strRemote, m_strRemote.GetLength(), (WPARAM)pFile);//消息机制
 		
 		long long nLength = *(long long*)pClient->GetPacket().strData.c_str();//得到第一个数据包储存的文件长度
 		if (nLength == 0) {

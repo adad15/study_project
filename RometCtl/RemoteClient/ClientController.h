@@ -55,15 +55,17 @@ public:
 		size_t nLength = 0, std::list<CPacket>* plstPacks = NULL);*/  //事件处理机制
 	bool SendCommandPacket(
 		HWND hWnd,//数据包应答后，需要应答的窗口
-		int nCmd, 
-		bool bAutoClose = true, 
+		int nCmd,
+		bool bAutoClose = true,
 		BYTE* pData = NULL,
-		size_t nLength = 0); //消息处理机制,返回值表示状态，true表示成功
+		size_t nLength = 0,
+		WPARAM wParam = 0); //消息处理机制,返回值表示状态，true表示成功
 
 	int GetImage(CImage& image) {
 		CClientSockrt* pClient = CClientSockrt::getInstance();
 		return CMyTool::Bytes2Image(image, pClient->GetPacket().strData);
 	}
+	void DownloadEnd();
 	int DownFile(CString strPath);
 	void StartWatchScreen();
 protected:

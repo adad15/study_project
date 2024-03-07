@@ -55,7 +55,7 @@ public:
 		for (; i < nSize; i++) {
 			if (*(WORD*)(pData + i) == 0xFEFE) {
 				sHead = *(WORD*)(pData + i);
-				i += 2;  //i向后移动两字节，把包头部分除去
+				i += 2;  //i 向后移动两字节，把包头部分除去
 				break;
 			}
 			if (i + 4 + 2 + 2 > nSize) { //包数据可能不全，或者包头未能全部接收到
@@ -152,19 +152,23 @@ typedef struct file_info {
 typedef struct PacketData {
 	std::string strData;
 	UINT nMode;
-	PacketData(const char* pData, size_t nLen, UINT mode) {
+	WPARAM wParam;
+	PacketData(const char* pData, size_t nLen, UINT mode, WPARAM nParam = 0) {
 		strData.resize(nLen);
 		memcpy((char*)strData.c_str(), pData, nLen);
 		nMode = mode;
+		wParam = nParam;
 	}
 	PacketData(const PacketData& data) {
 		strData = data.strData;
 		nMode = data.nMode;
+		wParam = data.wParam;
 	}
 	PacketData& operator=(const PacketData& data) {
 		if (this != &data) {
 			strData = data.strData;
 			nMode = data.nMode;
+			wParam = data.wParam;
 		}
 		return *this;
 	}
@@ -255,7 +259,7 @@ public:
 	//事件机制下的SendPacket函数
 	//bool SendPacket(const CPacket& pack, std::list<CPacket>& lstPacks, bool isAutoClosed = true); 
 	//消息机制下的SendPacket函数
-	bool SendPacket(HWND hWnd, const CPacket& pack, bool isAutoClosed = true);
+	bool SendPacket(HWND hWnd, const CPacket& pack, bool isAutoClosed = true, WPARAM wParam = 0);
 
 	//将命令2解包后的类中的数据向外传递
 	bool GetFilePath(std::string& strPath) {
@@ -338,7 +342,7 @@ private:
 				TRACE("插入失败，消息值：%d 函数值：%08X 序号：%d\r\n", funcs[i].message, funcs[i].func, i);
 			}
 		}
-	}
+	}                                                                                         
 	~CClientSockrt() {
 		closesocket(m_sock);
 		m_sock = INVALID_SOCKET;

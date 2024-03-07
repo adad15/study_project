@@ -42,6 +42,7 @@ BEGIN_MESSAGE_MAP(CWatchDialog, CDialog)
 	ON_STN_CLICKED(IDC_WATCH, &CWatchDialog::OnStnClickedWatch)
 	ON_BN_CLICKED(IDC_BTN_UNLOCK, &CWatchDialog::OnBnClickedBtnUnlock)
 	ON_BN_CLICKED(IDC_BTN_LOCK, &CWatchDialog::OnBnClickedBtnLock)
+	ON_MESSAGE(WM_SEND_PACK_ACK,&CWatchDialog::OnSendPackAck)
 END_MESSAGE_MAP()
 
 
@@ -68,7 +69,8 @@ BOOL CWatchDialog::OnInitDialog()
 	CDialog::OnInitDialog();
 	m_isFull = false;
 	//0是事件的ID，50是毫秒，最后参数表示时间回调函数，默认为OnTimer
-	SetTimer(0, 45, NULL);
+	//SetTimer(0, 45, NULL);
+
 	return TRUE;  // return TRUE unless you set the focus to a control
 	// 异常: OCX 属性页应返回 FALSE
 }
@@ -76,35 +78,87 @@ BOOL CWatchDialog::OnInitDialog()
 //更新屏幕
 void CWatchDialog::OnTimer(UINT_PTR nIDEvent){
 
-	// 取数据,这里检查定时器的标识符是否为0
-	if (nIDEvent == 0) {
-		//返回的父窗口对象指针
-		CClientController* pParent = CClientController::getInstance(); //类型转换，从父类到子类
-		if (m_isFull) {
-			CRect rect;
-			m_picture.GetWindowRect(rect);
+	//// 取数据,这里检查定时器的标识符是否为0
+	//if (nIDEvent == 0) {
+	//	//返回的父窗口对象指针
+	//	CClientController* pParent = CClientController::getInstance(); //类型转换，从父类到子类
+	//	if (m_isFull) {
+	//		CRect rect;
+	//		m_picture.GetWindowRect(rect);
 
-			m_nObjWidth = m_image.GetWidth();
-			m_nObjHeight = m_image.GetHeight();
-	
-			//得到picture contol的Dc
-			//通过GetImage()方法获取父窗口中的图像
-			//使用BitBlt函数将该图像绘制到m_picture（一个界面控件）的设备上下文（DC）中
-			//SRCCOPY是复制的模式，表示进行直接复制。
-			//pParent->GetImage().BitBlt(m_picture.GetDC()->GetSafeHdc(), 0, 0, SRCCOPY);
-			m_image.StretchBlt(m_picture.GetDC()->GetSafeHdc(),
-				0, 0, rect.Width(), rect.Height(), SRCCOPY);
-			m_picture.InvalidateRect(NULL);
-			TRACE("更新图片完成%d %d %08X\r\n", m_nObjWidth, m_nObjHeight, (HBITMAP)m_image);
-			//调用GetImage()返回的图像对象的Destroy()方法，可能是为了释放与这个图像相关的资源。
-			m_image.Destroy();
-			//把m_isFull设置为false。
-			m_isFull = false;
-		}
-	}
+	//		m_nObjWidth = m_image.GetWidth();
+	//		m_nObjHeight = m_image.GetHeight();
+	//
+	//		//得到picture contol的Dc
+	//		//通过GetImage()方法获取父窗口中的图像
+	//		//使用BitBlt函数将该图像绘制到m_picture（一个界面控件）的设备上下文（DC）中
+	//		//SRCCOPY是复制的模式，表示进行直接复制。
+	//		//pParent->GetImage().BitBlt(m_picture.GetDC()->GetSafeHdc(), 0, 0, SRCCOPY);
+	//		m_image.StretchBlt(m_picture.GetDC()->GetSafeHdc(),
+	//			0, 0, rect.Width(), rect.Height(), SRCCOPY);
+	//		m_picture.InvalidateRect(NULL);
+	//		TRACE("更新图片完成%d %d %08X\r\n", m_nObjWidth, m_nObjHeight, (HBITMAP)m_image);
+	//		//调用GetImage()返回的图像对象的Destroy()方法，可能是为了释放与这个图像相关的资源。
+	//		m_image.Destroy();
+	//		//把m_isFull设置为false。
+	//		m_isFull = false;
+	//	}
+	//}
 	CDialog::OnTimer(nIDEvent);
 }
 
+
+LRESULT CWatchDialog::OnSendPackAck(WPARAM wParam, LPARAM lPrarm)
+{
+	if (lPrarm == -1 || lPrarm == -2)//错误处理
+	{
+
+	}
+	else if (lPrarm == 1) {//对方关闭了套接字
+
+	}
+	else{
+		CPacket* pPacket = (CPacket*)wParam;
+		if (pPacket != NULL) {
+			switch (pPacket->sCmd)
+			{
+			case 6:
+			{
+				if (m_isFull) {
+					CMyTool::Bytes2Image(m_image, pPacket->strData);
+					//代替了OnTimer，收到一个图片就发送一个，就不需要计时器了。
+					CRect rect;
+					m_picture.GetWindowRect(rect);
+
+					m_nObjWidth = m_image.GetWidth();
+					m_nObjHeight = m_image.GetHeight();
+
+					//得到picture contol的Dc
+					//通过GetImage()方法获取父窗口中的图像
+					//使用BitBlt函数将该图像绘制到m_picture（一个界面控件）的设备上下文（DC）中
+					//SRCCOPY是复制的模式，表示进行直接复制。
+					//pParent->GetImage().BitBlt(m_picture.GetDC()->GetSafeHdc(), 0, 0, SRCCOPY);
+					m_image.StretchBlt(m_picture.GetDC()->GetSafeHdc(),
+						0, 0, rect.Width(), rect.Height(), SRCCOPY);
+					m_picture.InvalidateRect(NULL);
+					TRACE("更新图片完成%d %d %08X\r\n", m_nObjWidth, m_nObjHeight, (HBITMAP)m_image);
+					//调用GetImage()返回的图像对象的Destroy()方法，可能是为了释放与这个图像相关的资源。
+					m_image.Destroy();
+					//把m_isFull设置为false。
+					m_isFull = false;
+				}
+				break;
+			}
+			case 5:
+			case 7:
+			case 8:
+			default:
+				break;
+			}
+		}
+	}
+	return 0;
+}
 
 void CWatchDialog::OnLButtonDblClk(UINT nFlags, CPoint point)
 {

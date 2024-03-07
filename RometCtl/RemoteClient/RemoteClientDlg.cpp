@@ -95,6 +95,7 @@ BEGIN_MESSAGE_MAP(CRemoteClientDlg, CDialogEx)
 	ON_WM_TIMER()
 	ON_NOTIFY(IPN_FIELDCHANGED, IDC_IPADDRESS_SERV, &CRemoteClientDlg::OnIpnFieldchangedIpaddressServ)
 	ON_EN_CHANGE(IDC_EDIT_PORT, &CRemoteClientDlg::OnEnChangeEditPort)
+	ON_MESSAGE(WM_SEND_PACK_ACK, &CRemoteClientDlg::OnSendPackAck)
 END_MESSAGE_MAP()
 
 
@@ -206,31 +207,9 @@ void CRemoteClientDlg::OnBnClickedBtnFileinfo()
 	// TODO: 在此添加控件通知处理程序代码
 	//int ret = CClientController::getInstance()->SendCommandPacket(1, true, NULL, 0, &lstPackets); //连接服务器,拿到磁盘信息，并解包
 	int ret = CClientController::getInstance()->SendCommandPacket(GetSafeHwnd(), 1, true, NULL, 0); //消息处理机制
-	if (ret == -1 || (lstPackets.size() <= 0)) {
+	if (ret == 0) {
 		AfxMessageBox(_T("命令处理失败!!!"));
 		return;
-	}
-	CPacket& head = lstPackets.front();
-	std::string drivers = head.strData;  //得到解包后的命令信息
-	std::string dr;
-	//清理m_Tree控件
-	m_Tree.DeleteAllItems();
-
-	for (size_t i{}; i < drivers.size(); i++) {
-		if (drivers[i] == ',') {
-			dr += ":";
-			//把信息添加到根目录，TVI_LAST表示追加的形式。
-			HTREEITEM hTemp = m_Tree.InsertItem(dr.c_str(), TVI_ROOT, TVI_LAST);
-			m_Tree.InsertItem(NULL, hTemp, TVI_LAST); //在目录节点后面添加空的子节点
-			dr.clear();
-			continue;
-		}
-		dr += drivers[i];
-	}
-	if (dr.size() > 0) {
-		dr += ":";
-		HTREEITEM hTemp = m_Tree.InsertItem(dr.c_str(), TVI_ROOT, TVI_LAST);
-		m_Tree.InsertItem(NULL, hTemp, TVI_LAST); //在目录节点后面添加空的子节点
 	}
 }
 
@@ -281,7 +260,7 @@ void CRemoteClientDlg::LoadFileInfo()
 	/*int nCmd = CClientController::getInstance()->SendCommandPacket(2, false,
 		(BYTE*)(LPCSTR)strPath, strPath.GetLength(), &lstPackets);*/
 	int nCmd = CClientController::getInstance()->SendCommandPacket(GetSafeHwnd(), 2, false,
-		(BYTE*)(LPCSTR)strPath, strPath.GetLength());//消息响应机制
+		(BYTE*)(LPCSTR)strPath, strPath.GetLength(), (WPARAM)hTreeSelected);//消息响应机制
 	if (lstPackets.size() > 0) {
 		TRACE("lstPackets.size = %d\r\n", lstPackets.size()); 
 		std::list<CPacket>::iterator it = lstPackets.begin();
@@ -449,4 +428,104 @@ void CRemoteClientDlg::OnEnChangeEditPort()
 	CClientController* pController = CClientController::getInstance();
 	//更新网络地址数据
 	pController->UpdateAddress(m_server_address, atoi((LPCTSTR)m_nPos));
+}
+
+LRESULT CRemoteClientDlg::OnSendPackAck(WPARAM wParam, LPARAM lPrarm)
+{
+	if (lPrarm == -1 || lPrarm == -2)//错误处理
+	{
+
+	}
+	else if (lPrarm == 1) {//对方关闭了套接字
+
+	}
+	else {
+		CPacket* pPacket = (CPacket*)wParam;
+		if (pPacket != NULL) {
+			CPacket& head = *pPacket;
+			switch (pPacket->sCmd)
+			{
+			case 1://获取驱动信息
+			{
+				std::string drivers = head.strData;  //得到解包后的命令信息
+				std::string dr;
+				//清理m_Tree控件
+				m_Tree.DeleteAllItems();
+
+				for (size_t i{}; i < drivers.size(); i++) {
+					if (drivers[i] == ',') {
+						dr += ":";
+						//把信息添加到根目录，TVI_LAST表示追加的形式。
+						HTREEITEM hTemp = m_Tree.InsertItem(dr.c_str(), TVI_ROOT, TVI_LAST);
+						m_Tree.InsertItem(NULL, hTemp, TVI_LAST); //在目录节点后面添加空的子节点
+						dr.clear();
+						continue;
+					}
+					dr += drivers[i];
+				}
+				if (dr.size() > 0) {
+					dr += ":";
+					HTREEITEM hTemp = m_Tree.InsertItem(dr.c_str(), TVI_ROOT, TVI_LAST);
+					m_Tree.InsertItem(NULL, hTemp, TVI_LAST); //在目录节点后面添加空的子节点
+				}
+			}
+				break;
+			case 2://获取文件信息
+			{
+				PFILEINFPO pInfp = (PFILEINFPO)head.strData.c_str();
+				if (pInfp->HasNext == FALSE)break;
+				if (pInfp->IsDirectory) {
+					if (CString(pInfp->szFileName) == "." || CString(pInfp->szFileName) == "..") {
+						break;
+					}
+					HTREEITEM hTemp = m_Tree.InsertItem(pInfp->szFileName, (HTREEITEM)lPrarm, TVI_LAST);
+					//如果是目录，在节点的后面加上一个空的节点
+					m_Tree.InsertItem("", hTemp, TVI_LAST);
+				}
+				else {
+					m_List.InsertItem(0, pInfp->szFileName); //0是序号位置
+				}
+			}
+				break;
+			case 4://下载文件
+			{
+				//不需要循环，因为每次只处理一个包，会收到多个消息，以此变相相当于循环。
+				static LONGLONG length = 0, index = 0;
+				if (length == 0) {
+					length = *(long long*)head.strData.c_str();//得到第一个数据包储存的文件长度
+					if (length == 0) {
+						AfxMessageBox("文件长度为零或者无法读取文件！！！");
+						CClientController::getInstance()->DownloadEnd();
+					}
+				}
+				else if (length > 0 && (index >= length)) {
+					fclose((FILE*)lPrarm);
+					length = 0;
+					index = 0;
+					CClientController::getInstance()->DownloadEnd();
+				}
+				else
+				{
+					FILE* pFile = (FILE*)lPrarm;
+					//返回的是成功写入的字节数，所以每次写入一字节，最后返回值就是写入的字节数。
+					fwrite(head.strData.c_str(), 1, head.strData.size(), pFile);
+					index += head.strData.size();
+				}
+			}
+				break;
+			case 3://运行文件
+				TRACE("run file done!\r\n");
+			case 9://删除
+				TRACE("delete file done!\r\n");
+				break;
+			case 1981://测试
+				TRACE("test connection success!\r\n");
+				break;
+			default:
+				TRACE("unknow data received! %d\r\n", head.sCmd);
+				break;
+			}
+		}
+	}
+	return 0;
 }

@@ -1,6 +1,8 @@
 ﻿#pragma once
 #include "afxdialogex.h"
-
+#ifndef WM_SEND_PACK_ACK
+#define  WM_SEND_PACK_ACK (WM_USER+2)//发送包数据应答
+#endif
 
 // CWatchDialog 对话框
 
@@ -38,7 +40,8 @@ public:
 	virtual BOOL OnInitDialog();
 	afx_msg void OnTimer(UINT_PTR nIDEvent);
 	CStatic m_picture;
-	bool m_isFull;  //true表示有缓存数据
+	bool m_isFull;  //true 表示有缓存数据
+	afx_msg LRESULT OnSendPackAck(WPARAM wParam, LPARAM lPrarm);//响应函数
 	afx_msg void OnLButtonDblClk(UINT nFlags, CPoint point);
 	afx_msg void OnLButtonDown(UINT nFlags, CPoint point);
 	afx_msg void OnRButtonDblClk(UINT nFlags, CPoint point);
