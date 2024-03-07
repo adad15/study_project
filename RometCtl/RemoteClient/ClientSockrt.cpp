@@ -26,14 +26,13 @@ std::string GetErrorInfo(int wsaErrCode) {
 
 //消息机制下的SendPacket函数
 bool CClientSockrt::SendPacket(HWND hWnd, const CPacket& pack, bool isAutoClosed, WPARAM wParam) {
-	if (m_hThread == INVALID_HANDLE_VALUE) {
-		m_hThread = (HANDLE)_beginthreadex(NULL, 0, &CClientSockrt::threadEntry, this, 0, &m_nThreadID);
-	}
 	UINT nMode = isAutoClosed ? CSM_AUTOCLOSE : 0;
 	std::string strOut;
 	pack.Data(strOut);
-	return PostThreadMessage(m_nThreadID, WM_SEND_PACK,
+	//PostThreadMessage是不会管投递的结果的，投递失败也不会做出反应，SendMessage是要消息应答以后才去结束
+	bool ret = PostThreadMessage(m_nThreadID, WM_SEND_PACK,
 		(WPARAM)new PACKET_DATA(strOut.c_str(), strOut.size(), nMode, wParam), (LPARAM)hWnd);
+	return ret;
 }
 
 //事件机制下的SendPacket函数
@@ -205,10 +204,12 @@ void CClientSockrt::threadFunc()
 
 void CClientSockrt::threadFunc2()
 {
+	SetEvent(m_eventInvoke);
 	MSG msg;
 	while (::GetMessage(&msg, NULL, 0, 0)) {
 		TranslateMessage(&msg);
 		DispatchMessage(&msg);
+		TRACE("Get Message :%08X\r\n", msg.message);
 		if (m_mapFunc.find(msg.message) != m_mapFunc.end()) {
 			//通过键，找到值
 			(this->*m_mapFunc[msg.message])(msg.message, msg.wParam, msg.lParam);

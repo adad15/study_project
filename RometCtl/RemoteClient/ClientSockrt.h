@@ -288,6 +288,7 @@ public:
 	}
 
 private:
+	HANDLE m_eventInvoke;//启动事件
 	UINT m_nThreadID;
 	typedef void(CClientSockrt::* MSGFUNC)(UINT nMsg, WPARAM wParam, LPARAM lParam);
 	std::map<UINT, MSGFUNC>m_mapFunc;//消息映射表
@@ -325,6 +326,14 @@ private:
 			MessageBox(NULL, _T("无法初始化套接字环境，请检查网络设置！"), _T("初始化错误！"), MB_OK | MB_ICONERROR);
 			exit(0);
 		}
+
+		m_eventInvoke = CreateEvent(NULL, TRUE, FALSE, NULL);
+		//启动线程
+		m_hThread = (HANDLE)_beginthreadex(NULL, 0, &CClientSockrt::threadEntry, this, 0, &m_nThreadID);
+		if (WaitForSingleObject(m_eventInvoke, 100) == WAIT_TIMEOUT) {
+			TRACE("网络消息处理线程启动失败了!\r\n");
+		}
+		CloseHandle(m_eventInvoke);
 
 		//缓冲区初始化
 		m_buffer.resize(BUFFER_SIZE);

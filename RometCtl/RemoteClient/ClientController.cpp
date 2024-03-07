@@ -55,19 +55,28 @@ LRESULT CClientController::SendMessage(MSG msg)
 	return info.result;
 }
 
-//消息响应机制下的SendCommandPacket函数
+//消息响应机制下的SendCommandPacket函数，异步机制
 bool CClientController::SendCommandPacket(HWND hWnd, int nCmd, bool bAutoClose, BYTE* pData, size_t nLength, WPARAM wParam)
 {
 	TRACE("%s start %lld \r\n", __FUNCTION__, GetTickCount64());
 	//发送封装好的数据包
 	CClientSockrt* pClient = CClientSockrt::getInstance();
-
-	return pClient->SendPacket(hWnd, CPacket(nCmd, pData, nLength), bAutoClose, wParam);//plstPacks为输出参数
+	bool ret = pClient->SendPacket(hWnd, CPacket(nCmd, pData, nLength), bAutoClose, wParam);//plstPacks为输出参数
+	/*if (!ret) {
+		Sleep(30);
+		//第二次的时候会执行，是因为SendPacket里面调完_beginthreadex后，线程创建了，但是线程函数没有立刻被执行
+		//资源线程号已经被分配好了，线程的内存空间已经被分配好了，只是目前CPU还没有给它分配时间去执行
+		//所以后面PostThreadMessage会失败（只有线程函数调用::GetMessage才可以接受消息）
+		//所以主线程休眠30毫秒，子线程有机会拿到CPU的资源
+		//可以通过事件去处理
+		ret = pClient->SendPacket(hWnd, CPacket(nCmd, pData, nLength), bAutoClose, wParam);//plstPacks为输出参数
+	}*/
+	return ret;
 }
 
 
 
-//事件响应机制下的SendCommandPacket函数
+//事件响应机制下的SendCommandPacket函数，同步机制
 // 
 // int CClientController::SendCommandPacket(int nCmd, bool bAutoClose, BYTE* pData,
 // 	size_t nLength, std::list<CPacket>* plstPacks)//plstPacks = null 表示不关心应答
