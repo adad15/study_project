@@ -201,8 +201,10 @@ private:
 	static void releaseInstance() {
 		if (m_instance != NULL) {
 			CServerSocket* tmp = m_instance;
-			m_instance = NULL;
-			delete tmp;  //delete不仅仅释放内存空间，还会调用类的析构函数。
+			m_instance = NULL;//预防性编程，置空只会占用一条汇编指令，执行时间非常短。
+			//如果没有置空，可能拿到的m_instance是正在析构的。
+			//如果没有做线程隔离（没有设置静态变量，在main函数之前初始化），两个线程同时创建两个m_instance造成内存泄漏，只有最后一次调用的会生效，会覆盖前面的
+			delete tmp;  //delete不仅仅释放内存空间，还会调用类的析构函数。执行时间不可控
 		}
 	}
 
