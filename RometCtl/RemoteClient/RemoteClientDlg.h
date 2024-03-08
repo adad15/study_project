@@ -27,6 +27,9 @@ public:
 	void LoadFileInfo();
 private:	
 	void LoadFileCurrent();
+	void Str2Tree(const std::string& driver, CTreeCtrl& tree);
+	void UpdateFileInfo(const FILEINFPO& finfo, HTREEITEM hParent);
+	void UpdateDownloadFile(const std::string& strData, FILE* pFile);
 	CString GetPath(HTREEITEM hTree);
 	void DeleteTreeChildItem(HTREEITEM hTree);
 	

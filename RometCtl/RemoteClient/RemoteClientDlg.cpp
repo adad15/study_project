@@ -250,8 +250,6 @@ void CRemoteClientDlg::LoadFileInfo()
 		return;
 	}
 
-	//看选中的有没有子节点，没有就是文件，直接返回
-	if (m_Tree.GetChildItem(hTreeSelected) == NULL) return;
 	//防止多次双击造成的无限扩张
 	DeleteTreeChildItem(hTreeSelected);
 	m_List.DeleteAllItems();
@@ -291,6 +289,83 @@ void CRemoteClientDlg::LoadFileCurrent()
 		pInfp = (PFILEINFPO)CClientSockrt::getInstance()->GetPacket().strData.c_str();
 	}
 	//pClient->CloseSocket();
+}
+
+void CRemoteClientDlg::Str2Tree(const std::string& drivers, CTreeCtrl& tree)
+{
+	std::string dr;
+	//清理m_Tree控件
+	tree.DeleteAllItems();
+
+	for (size_t i{}; i < drivers.size(); i++) {
+		if (drivers[i] == ',') {
+			dr += ":";
+			//把信息添加到根目录，TVI_LAST表示追加的形式。
+			HTREEITEM hTemp = tree.InsertItem(dr.c_str(), TVI_ROOT, TVI_LAST);
+			tree.InsertItem(NULL, hTemp, TVI_LAST); //在目录节点后面添加空的子节点
+			dr.clear();
+			continue;
+		}
+		dr += drivers[i];
+	}
+	if (dr.size() > 0) {
+		dr += ":";
+		HTREEITEM hTemp = tree.InsertItem(dr.c_str(), TVI_ROOT, TVI_LAST);
+		tree.InsertItem(NULL, hTemp, TVI_LAST); //在目录节点后面添加空的子节点
+	}
+}
+
+void CRemoteClientDlg::UpdateFileInfo(const FILEINFPO& finfo, HTREEITEM hParent)
+{
+	TRACE("hasnext %d isdirectory %d %s\r\n", finfo.HasNext, finfo.IsDirectory, finfo.szFileName);
+	if (finfo.HasNext == FALSE)return;
+	if (finfo.IsDirectory) {
+		if (CString(finfo.szFileName) == "." || CString(finfo.szFileName) == "..") 
+			return;
+		TRACE("hselected %08X %08X\r\n", hParent, m_Tree.GetSelectedItem());
+		HTREEITEM hTemp = m_Tree.InsertItem(finfo.szFileName, hParent, TVI_LAST);
+		//如果是目录，在节点的后面加上一个空的节点
+		m_Tree.InsertItem("", hTemp, TVI_LAST);
+		//要展开
+		m_Tree.Expand(hParent, TVE_EXPAND);
+	}
+	else {
+		m_List.InsertItem(0, finfo.szFileName); //0是序号位置
+	}
+}
+
+void CRemoteClientDlg::UpdateDownloadFile(const std::string& strData, FILE* pFile)
+{
+	//不需要循环，因为每次只处理一个包，会收到多个消息，以此变相相当于循环。
+	static LONGLONG length = 0, index = 0;
+	TRACE("length %d index %d\r\n", length, index);
+	if (length == 0) {
+		length = *(long long*)strData.c_str();//得到第一个数据包储存的文件长度
+		if (length == 0) {
+			AfxMessageBox("文件长度为零或者无法读取文件！！！");
+			CClientController::getInstance()->DownloadEnd();
+		}
+	}
+	else if (length > 0 && (index >= length)) {
+		fclose(pFile);
+		length = 0;
+		index = 0;
+		CClientController::getInstance()->DownloadEnd();
+	}
+	else
+	{
+		//返回的是成功写入的字节数，所以每次写入一字节，最后返回值就是写入的字节数。
+		fwrite(strData.c_str(), 1, strData.size(), pFile);
+		index += strData.size();
+
+		//？？？我写的程序不需要这个，是因为服务器在发送完文件之后，会发一个空包？？？？？？
+		/*if (index >= length) {
+			fclose((FILE*)lPrarm);
+			length = 0;
+			index = 0;
+			CClientController::getInstance()->DownloadEnd();
+		}*/
+	}
 }
 
 void CRemoteClientDlg::OnNMDblclkTreeDir(NMHDR* pNMHDR, LRESULT* pResult)
@@ -415,10 +490,10 @@ LRESULT CRemoteClientDlg::OnSendPackAck(WPARAM wParam, LPARAM lPrarm)
 {
 	if (lPrarm == -1 || lPrarm == -2)//错误处理
 	{
-
+		TRACE("socket is error %d\r\n", lPrarm);
 	}
 	else if (lPrarm == 1) {//对方关闭了套接字
-
+		TRACE("socket is closed!\r\n");
 	}
 	else {
 		if (wParam != NULL) {
@@ -430,91 +505,28 @@ LRESULT CRemoteClientDlg::OnSendPackAck(WPARAM wParam, LPARAM lPrarm)
 			case 1://获取驱动信息
 			{
 				std::string drivers = head.strData;  //得到解包后的命令信息
-				std::string dr;
-				//清理m_Tree控件
-				m_Tree.DeleteAllItems();
-
-				for (size_t i{}; i < drivers.size(); i++) {
-					if (drivers[i] == ',') {
-						dr += ":";
-						//把信息添加到根目录，TVI_LAST表示追加的形式。
-						HTREEITEM hTemp = m_Tree.InsertItem(dr.c_str(), TVI_ROOT, TVI_LAST);
-						m_Tree.InsertItem(NULL, hTemp, TVI_LAST); //在目录节点后面添加空的子节点
-						dr.clear();
-						continue;
-					}
-					dr += drivers[i];
-				}
-				if (dr.size() > 0) {
-					dr += ":";
-					HTREEITEM hTemp = m_Tree.InsertItem(dr.c_str(), TVI_ROOT, TVI_LAST);
-					m_Tree.InsertItem(NULL, hTemp, TVI_LAST); //在目录节点后面添加空的子节点
-				}
+				Str2Tree(drivers, m_Tree);	
 			}
 				break;
 			case 2://获取文件信息
 			{
 				PFILEINFPO pInfp = (PFILEINFPO)head.strData.c_str();
-				TRACE("hasnext %d isdirectory %d %s\r\n", pInfp->HasNext, pInfp->IsDirectory, pInfp->szFileName);
-				if (pInfp->HasNext == FALSE)break;
-				if (pInfp->IsDirectory) {
-					if (CString(pInfp->szFileName) == "." || CString(pInfp->szFileName) == "..") {
-						break;
-					}
-					TRACE("hselected %08X %08X\r\n", lPrarm, m_Tree.GetSelectedItem());
-					HTREEITEM hTemp = m_Tree.InsertItem(pInfp->szFileName, (HTREEITEM)lPrarm, TVI_LAST);
-					//如果是目录，在节点的后面加上一个空的节点
-					m_Tree.InsertItem("", hTemp, TVI_LAST);
-					//要展开
-					m_Tree.Expand((HTREEITEM)lPrarm, TVE_EXPAND);
-				}
-				else {
-					m_List.InsertItem(0, pInfp->szFileName); //0是序号位置
-				}
+				UpdateFileInfo(*pInfp, (HTREEITEM)lPrarm);
 			}
 				break;
 			case 4://下载文件
 			{
-				//不需要循环，因为每次只处理一个包，会收到多个消息，以此变相相当于循环。
-				static LONGLONG length = 0, index = 0;
-				TRACE("length %d index %d\r\n", length, index);
-				if (length == 0) {
-					length = *(long long*)head.strData.c_str();//得到第一个数据包储存的文件长度
-					if (length == 0) {
-						AfxMessageBox("文件长度为零或者无法读取文件！！！");
-						CClientController::getInstance()->DownloadEnd();
-					}
-				}
-				else if (length > 0 && (index >= length)) {
-					fclose((FILE*)lPrarm);
-					length = 0;
-					index = 0;
-					CClientController::getInstance()->DownloadEnd();
-				}
-				else
-				{
-					FILE* pFile = (FILE*)lPrarm;
-					//返回的是成功写入的字节数，所以每次写入一字节，最后返回值就是写入的字节数。
-					fwrite(head.strData.c_str(), 1, head.strData.size(), pFile);
-					index += head.strData.size();
-					
-					//？？？我写的程序不需要这个，是因为服务器在发送完文件之后，会发一个空包？？？？？？
-					/*if (index >= length) {
-						fclose((FILE*)lPrarm);
-						length = 0;
-						index = 0;
-						CClientController::getInstance()->DownloadEnd();
-					}*/
-				}
+				UpdateDownloadFile(head.strData, (FILE*)lPrarm);
 			}
 				break;
 			case 3://运行文件
-				TRACE("run file done!\r\n");
+				MessageBox("打开文件完成！", "操作成功", MB_ICONINFORMATION);
+				break;
 			case 9://删除
-				TRACE("delete file done!\r\n");
+				MessageBox("删除文件完成！", "操作成功", MB_ICONINFORMATION);
 				break;
 			case 1981://测试
-				TRACE("test connection success!\r\n");
+				MessageBox("连接测试成功！", "连接成功", MB_ICONINFORMATION);
 				break;
 			default:
 				TRACE("unknow data received! %d\r\n", head.sCmd);

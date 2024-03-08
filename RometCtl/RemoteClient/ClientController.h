@@ -22,8 +22,6 @@ public:
 	int InitController();
 	//启动函数
 	int Invoke(CWnd*& pMainWnd);
-	//发送消息
-	LRESULT SendMessage(MSG msg);
 
 	//把ClientSockrt类中的方法进行映射
 	//更新网络服务器的地址
@@ -72,8 +70,6 @@ protected:
 	//两个线程函数
 	void threadWatchScreen();
 	static void threadEntryForWatchData(void* arg);
-	void threadDownloadFile();
-	static void threadDownloadEntry(void* arg);
 
 	CClientController():
 	m_statusDlg(&m_remoteDlg),
@@ -81,7 +77,6 @@ protected:
 	{
 		m_isClose = true;
 		m_hThreadWatch = INVALID_HANDLE_VALUE;
-		m_hThreadDownload = INVALID_HANDLE_VALUE;
 		m_hThread = INVALID_HANDLE_VALUE;
 		m_nThreadID = -1;
 	}
@@ -131,7 +126,6 @@ private:
 	CRemoteClientDlg m_remoteDlg;
 	CStatusDlg m_statusDlg;
 	HANDLE m_hThread;
-	HANDLE m_hThreadDownload;
 	HANDLE m_hThreadWatch;
 	unsigned m_nThreadID;
 	//下载文件的远程路径
