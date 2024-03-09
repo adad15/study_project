@@ -6,6 +6,7 @@
 #include "ServerSocket.h"
 #include "Command.h"
 #include "MyTool.h"
+#include <conio.h>
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -53,35 +54,126 @@ bool ChooseAutoInvoke(const CString& strPath) {
     return true;
 }
 
+enum {
+    IocpListEmpty,
+    IocpListPush,
+    IocpListPop
+};
+typedef struct IocpParam {
+	int nOperator;//操作
+	std::string strData;//数据
+	_beginthread_proc_type cbFunc;//回调
+	IocpParam(int op, const char* sData, _beginthread_proc_type cb = NULL) {
+		nOperator = op;
+		strData = sData;
+		cbFunc = cb;
+	}
+	IocpParam() {
+		nOperator = -1;
+	}
+}IOCP_PARAM;
+//处理数据的线程
+void threadQueueEntry(HANDLE hIOCP) {
+    std::list<std::string> lstString;
+    DWORD dwTransferred{};
+    ULONG_PTR CompletionKey{};
+    OVERLAPPED* pOverlapped{ NULL };
+    while (GetQueuedCompletionStatus(hIOCP, &dwTransferred, &CompletionKey, &pOverlapped, INFINITE/*无限等待*/))
+    {
+        if ((dwTransferred == 0) || (CompletionKey == NULL)) {
+			printf("thread is prepare is exit!\r\n");
+			break;
+        }
+        //这正传递数据是使用异步数据，而不是使用CompletionKey。这里是示范
+        IOCP_PARAM* pParam = (IOCP_PARAM*)CompletionKey;
+        if (pParam->nOperator == IocpListPush) {
+            lstString.push_back(pParam->strData);
+        }
+        else if (pParam->nOperator == IocpListPop) {
+            std::string* pStr = NULL;
+            if (lstString.size() > 0) {
+                pStr = new std::string(lstString.front());
+                lstString.pop_front();
+            }
+            if (pParam->cbFunc) {
+                pParam->cbFunc(pStr);
+            }
+        }
+        else if (pParam->nOperator == IocpListEmpty) {
+            lstString.clear();
+        }
+        delete pParam;
+    }
+    _endthread();
+}
+//回调函数
+void func(void* arg) {
+    std::string* pstr = (std::string*)arg;
+    if (pstr != NULL) {
+		printf("pop from list:%s\r\n", pstr->c_str());
+    }
+    else {
+        printf("list is empty,no data!\r\n");
+    }
+    delete pstr;
+}
+
 int main()
 {
-	if (CMyTool::IsAdmin()) {
-        if (!CMyTool::Init()) return 1;
-		//printf("current is run as administrator!\r\n");//命令行输出屏蔽掉了，不能printf
-		OutputDebugString(L"current is run as administrator!\r\n");
-		MessageBox(NULL, _T("管理员"), _T("用户状态"), 0);
-		// TODO: 在此处为应用程序的行为编写代码。
-		if (ChooseAutoInvoke(INVOKE_PATH)) {
-			CCommand cmd;
-			int ret = CServerSocket::getInstance()->Run(&CCommand::RunCommand, &cmd);//为什么还要取地址？？
-			switch (ret)
-			{
-			case -1:
-				MessageBox(NULL, _T("网络初始化异常，未能初始化，请检查网络！"), _T("网络初始化失败！"), MB_OK | MB_ICONERROR);
-				break;
-			case -2:
-				MessageBox(NULL, _T("多次无法正常接入用户，自动结束程序"), _T("接入用户失败！"), MB_OK | MB_ICONERROR);
-				break;
-			}
+    if (!CMyTool::Init()) return 1;
+    printf("press any key to exit ...\r\n");
+    HANDLE hIOCP = INVALID_HANDLE_VALUE;//Input/Output Completion Port
+    hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE/*句柄*/, NULL, NULL, 1/*能够同时访问的线程数*/);//和epoll区别1
+    HANDLE hThread = (HANDLE)_beginthread(threadQueueEntry, 0, hIOCP);//传到线程里面去
+    
+    ULONGLONG tick = GetTickCount64();
+    while (_kbhit() == 0){//如果按键没有按下
+        //读写,请求和实现实现了分离
+		if (GetTickCount64() - tick > 1300) {
+			PostQueuedCompletionStatus(hIOCP, sizeof(IOCP_PARAM), (ULONG_PTR)new IOCP_PARAM(IocpListPop, "hello world"), NULL);
 		}
-	}
-	else {
-		OutputDebugString(L"current is run as normal user!\r\n");
-		if (CMyTool::RunAsAdmin() == false) {//会再次调用main函数
-			CMyTool::ShowError();
-			return 1;
-		}
-		MessageBox(NULL, _T("普通用户已变更为管理员"), _T("用户状态"), 0);
-	}
+        if (GetTickCount64() - tick > 2000) {
+            PostQueuedCompletionStatus(hIOCP, sizeof(IOCP_PARAM), (ULONG_PTR)new IOCP_PARAM(IocpListPush, "hello world"), NULL);
+            tick = GetTickCount64();
+        }
+        Sleep(1);
+    }
+    if (hIOCP != NULL) {
+        //往端口post一个空的东西，表示结束端口，结束线程
+        PostQueuedCompletionStatus(hIOCP, 0, NULL, NULL);
+        WaitForSingleObject(hThread, INFINITE);//无限等待线程结束
+    }
+    CloseHandle(hIOCP);
+    printf("exit done!\r\n");
+    exit(0);
+
+// 	if (CMyTool::IsAdmin()) {
+//         if (!CMyTool::Init()) return 1;
+// 		//printf("current is run as administrator!\r\n");//命令行输出屏蔽掉了，不能printf
+// 		OutputDebugString(L"current is run as administrator!\r\n");
+// 		MessageBox(NULL, _T("管理员"), _T("用户状态"), 0);
+// 		// TODO: 在此处为应用程序的行为编写代码。
+// 		if (ChooseAutoInvoke(INVOKE_PATH)) {
+// 			CCommand cmd;
+// 			int ret = CServerSocket::getInstance()->Run(&CCommand::RunCommand, &cmd);//为什么还要取地址？？
+// 			switch (ret)
+// 			{
+// 			case -1:
+// 				MessageBox(NULL, _T("网络初始化异常，未能初始化，请检查网络！"), _T("网络初始化失败！"), MB_OK | MB_ICONERROR);
+// 				break;
+// 			case -2:
+// 				MessageBox(NULL, _T("多次无法正常接入用户，自动结束程序"), _T("接入用户失败！"), MB_OK | MB_ICONERROR);
+// 				break;
+// 			}
+// 		}
+// 	}
+// 	else {
+// 		OutputDebugString(L"current is run as normal user!\r\n");
+// 		if (CMyTool::RunAsAdmin() == false) {//会再次调用main函数
+// 			CMyTool::ShowError();
+// 			return 1;
+// 		}
+// 		MessageBox(NULL, _T("普通用户已变更为管理员"), _T("用户状态"), 0);
+// 	}
     return 0;
 }
