@@ -92,8 +92,52 @@ void ChooseAutoInvoke() {
     return;
 }
 
+//错误处理函数
+void ShowError() {
+    LPWSTR lpMessageBuf = NULL;
+    //strerror(errno);//标准C语言库
+    FormatMessage(
+        FORMAT_MESSAGE_FROM_SYSTEM/*格式化消息*/ | FORMAT_MESSAGE_ALLOCATE_BUFFER/*自动分配buf*/,
+        NULL, GetLastError()/*显示当前线程错误编号*/, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT)/*语言*/,
+        (LPWSTR)&lpMessageBuf, 0, NULL);
+    OutputDebugString(lpMessageBuf);//打印错误
+    LocalFree(lpMessageBuf);//释放内存空间
+}
+
+//获取当前进程的权限
+bool IsAdmin() {
+    //令牌，使用句柄来表示
+    HANDLE hToken = NULL;
+    //只显示当前线程的错误
+    //OpenProcessToken 函数打开与进程关联的访问令牌。
+    if (!OpenProcessToken(GetCurrentProcess()/*获取当前进程的句柄*/, TOKEN_QUERY/*查询*/, &hToken)) {
+        ShowError();
+        return false;
+    }
+    TOKEN_ELEVATION eve;
+    DWORD len{};
+    if (GetTokenInformation(hToken, TokenElevation/*提权信息*/, &eve, sizeof(eve), &len) == false) {
+        ShowError();
+        return false;
+    }
+    CloseHandle(hToken);
+    if (len == sizeof(eve)) {
+        return eve.TokenIsElevated;//提了权就返回大于零的数，不是提权的就是零
+    }
+    printf("length of tokeninformation is %d\r\n", len);
+    return false;
+}
+
 int main()
 {
+    if (IsAdmin()) {
+        //printf("current is run as administrator!\r\n");//命令行输出屏蔽掉了，不能printf
+        OutputDebugString(L"current is run as administrator!\r\n");
+    }
+    else {
+        OutputDebugString(L"current is run as normal user!\r\n");
+    }
+
     int nRetCode = 0;
 
     HMODULE hModule = ::GetModuleHandle(nullptr);
