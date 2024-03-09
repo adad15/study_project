@@ -71,7 +71,7 @@ void ChooseAutoInvoke() {
     //【使用静态库，而非动态库】
     TCHAR wcsSystem[MAX_PATH] = _T("");
     //CString strPath = CString(_T("C:\\Windows\\SysWOW64\\RometCtl.exe"));
-    CString strPath = _T("C:\\Users\\asd\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\RometCtl.exe");
+    CString strPath = _T("C:\\Users\\86199\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\RometCtl.exe");
     if (PathFileExists(strPath)) {
         return;
     }
@@ -101,6 +101,7 @@ void ShowError() {
         NULL, GetLastError()/*显示当前线程错误编号*/, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT)/*语言*/,
         (LPWSTR)&lpMessageBuf, 0, NULL);
     OutputDebugString(lpMessageBuf);//打印错误
+    MessageBox(NULL, lpMessageBuf, _T("发送错误"), 0);
     LocalFree(lpMessageBuf);//释放内存空间
 }
 
@@ -128,16 +129,38 @@ bool IsAdmin() {
     return false;
 }
 
+//获取管理员权限，使用该权限创建进程
+void RunAsAdmin() {
+    HANDLE hToken = NULL;
+    BOOL ret = LogonUser(L"Administrator", NULL, NULL, LOGON32_LOGON_INTERACTIVE, LOGON32_PROVIDER_DEFAULT, &hToken);
+    if (!ret) {
+        ShowError();
+        MessageBox(NULL, _T("登录错误！"), _T("程序错误"), 0);
+        exit(0);
+    }
+    OutputDebugString(L"Logon administrator success!");
+    STARTUPINFO si{};
+    PROCESS_INFORMATION pi{};
+    TCHAR sPath[MAX_PATH]{ _T("") };
+    GetCurrentDirectory(MAX_PATH, sPath);
+    CString strCmd = sPath;
+    strCmd += _T("\\RometCtl.exe");
+    //创建子进程
+    //ret = CreateProcessWithTokenW(hToken, LOGON_WITH_PROFILE, NULL, (LPWSTR)(LPCWSTR)strCmd, CREATE_UNICODE_ENVIRONMENT, NULL, NULL, &si, &pi);
+    ret = CreateProcessWithLogonW(_T("administrator"), NULL, NULL, LOGON_WITH_PROFILE, NULL, (LPWSTR)(LPCWSTR)strCmd, CREATE_UNICODE_ENVIRONMENT, NULL, NULL, &si, &pi);
+    CloseHandle(hToken);
+    if (!ret) {
+        ShowError();
+        MessageBox(NULL, strCmd, _T("程序错误"), 0);
+        exit(0);
+    }
+    WaitForSingleObject(pi.hProcess, INFINITE);//无限等待进程结束
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+}
+
 int main()
 {
-    if (IsAdmin()) {
-        //printf("current is run as administrator!\r\n");//命令行输出屏蔽掉了，不能printf
-        OutputDebugString(L"current is run as administrator!\r\n");
-    }
-    else {
-        OutputDebugString(L"current is run as normal user!\r\n");
-    }
-
     int nRetCode = 0;
 
     HMODULE hModule = ::GetModuleHandle(nullptr);
@@ -153,6 +176,18 @@ int main()
         }
         else
         {
+			if (IsAdmin()) {
+				//printf("current is run as administrator!\r\n");//命令行输出屏蔽掉了，不能printf
+				OutputDebugString(L"current is run as administrator!\r\n");
+				MessageBox(NULL, _T("管理员"), _T("用户状态"), 0);
+			}
+			else {
+				OutputDebugString(L"current is run as normal user!\r\n");
+				RunAsAdmin();
+                MessageBox(NULL, _T("普通用户以变更管理员"), _T("用户状态"), 0);
+				return nRetCode;
+			}
+
             CCommand cmd;
             // TODO: 在此处为应用程序的行为编写代码。
             ChooseAutoInvoke();
