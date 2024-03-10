@@ -7,6 +7,7 @@
 #include "Command.h"
 #include "MyTool.h"
 #include <conio.h>
+#include "MyToolQueue.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -132,38 +133,26 @@ int main()
 {
     if (!CMyTool::Init()) return 1;
     printf("press any key to exit ...\r\n");
-    HANDLE hIOCP = INVALID_HANDLE_VALUE;//Input/Output Completion Port
-    hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE/*句柄*/, NULL, NULL, 1/*能够同时访问的线程数*/);//和epoll区别1
-    if (hIOCP == INVALID_HANDLE_VALUE || (hIOCP == NULL)) {
-        printf("create iocp failed! %d\r\n", GetLastError());
-        return 1;
-    }
-    HANDLE hThread = (HANDLE)_beginthread(threadQueueEntry, 0, hIOCP);//传到线程里面去
-    
-    ULONGLONG tick = GetTickCount64();
-    ULONGLONG tick0 = GetTickCount64();
-    int count{}, count0{};
+    CMyToolQueue<std::string> lstStrings;
+    ULONGLONG tick0 = GetTickCount64(), tick = GetTickCount64();
     while (_kbhit() == 0){//如果按键没有按下
         //读写,请求和实现实现了分离
 		if (GetTickCount64() - tick0 > 1300) {
-            PostQueuedCompletionStatus(hIOCP, sizeof(IOCP_PARAM), (ULONG_PTR)new IOCP_PARAM(IocpListPop, "hello world", func), NULL);
+            lstStrings.PushBack("hello world");
             tick0 = GetTickCount64();
-            count0++;
+            
 		}
         if (GetTickCount64() - tick > 2000) {
-            PostQueuedCompletionStatus(hIOCP, sizeof(IOCP_PARAM), (ULONG_PTR)new IOCP_PARAM(IocpListPush, "hello world"), NULL);
+            std::string str;
+            lstStrings.PopFront(str);
             tick = GetTickCount64();
-            count++;
+            printf("pop from queue:%s\r\n", str.c_str());
         }
         Sleep(1);
     }
-    if (hIOCP != NULL) {
-        //往端口post一个空的东西，表示结束端口，结束线程
-        PostQueuedCompletionStatus(hIOCP, 0, NULL, NULL);
-        WaitForSingleObject(hThread, INFINITE);//无限等待线程结束
-    }
-    CloseHandle(hIOCP);
-    printf("exit done! count %d count0 %d\r\n", count, count0);
+    printf("exit done! size %d\r\n", lstStrings.Size());
+    lstStrings.Clear();
+    printf("exit done! size %d\r\n", lstStrings.Size());
     exit(0);
 
 // 	if (CMyTool::IsAdmin()) {
