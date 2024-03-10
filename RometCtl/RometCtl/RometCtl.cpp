@@ -72,39 +72,49 @@ typedef struct IocpParam {
 		nOperator = -1;
 	}
 }IOCP_PARAM;
-//处理数据的线程
-void threadQueueEntry(HANDLE hIOCP) {
-    std::list<std::string> lstString;
-    DWORD dwTransferred{};
-    ULONG_PTR CompletionKey{};
-    OVERLAPPED* pOverlapped{ NULL };
-    while (GetQueuedCompletionStatus(hIOCP, &dwTransferred, &CompletionKey, &pOverlapped, INFINITE/*无限等待*/))
-    {
-        if ((dwTransferred == 0) || (CompletionKey == NULL)) {
+
+void threadmain(HANDLE hIOCP) {
+	std::list<std::string> lstString;
+	DWORD dwTransferred{};
+	ULONG_PTR CompletionKey{};
+	OVERLAPPED* pOverlapped{ NULL };
+	int count{}, count0{};
+	while (GetQueuedCompletionStatus(hIOCP, &dwTransferred, &CompletionKey, &pOverlapped, INFINITE/*无限等待*/))
+	{
+		if ((dwTransferred == 0) || (CompletionKey == NULL)) {
 			printf("thread is prepare is exit!\r\n");
 			break;
-        }
-        //这正传递数据是使用异步数据，而不是使用CompletionKey。这里是示范
-        IOCP_PARAM* pParam = (IOCP_PARAM*)CompletionKey;
-        if (pParam->nOperator == IocpListPush) {
-            lstString.push_back(pParam->strData);
-        }
-        else if (pParam->nOperator == IocpListPop) {
-            std::string* pStr = NULL;
-            if (lstString.size() > 0) {
-                pStr = new std::string(lstString.front());
-                lstString.pop_front();
-            }
-            if (pParam->cbFunc) {
-                pParam->cbFunc(pStr);
-            }
-        }
-        else if (pParam->nOperator == IocpListEmpty) {
-            lstString.clear();
-        }
-        delete pParam;
-    }
-    _endthread();
+		}
+		//正式传递数据是使用异步数据，而不是使用CompletionKey。这里是示范
+		IOCP_PARAM* pParam = (IOCP_PARAM*)CompletionKey;
+		if (pParam->nOperator == IocpListPush) {
+			lstString.push_back(pParam->strData);
+			printf("push size %d\r\n", lstString.size());
+			count++;
+		}
+		else if (pParam->nOperator == IocpListPop) {
+			printf("%p size %d\r\n", pParam->cbFunc, lstString.size());
+			std::string* pStr = NULL;
+			if (lstString.size() > 0) {
+				pStr = new std::string(lstString.front());
+				lstString.pop_front();
+			}
+			if (pParam->cbFunc) {
+				pParam->cbFunc(pStr);
+			}
+			count0++;
+		}
+		else if (pParam->nOperator == IocpListEmpty) {
+			lstString.clear();
+		}
+		delete pParam;
+	}
+	printf("count %d count0 %d\r\n", count, count0);
+}
+//处理数据的线程
+void threadQueueEntry(HANDLE hIOCP) {
+    threadmain(hIOCP);
+    _endthread();//代码到此为止，会导致本地对象无法调用析构，从而使得内存泄漏
 }
 //回调函数
 void func(void* arg) {
@@ -124,17 +134,26 @@ int main()
     printf("press any key to exit ...\r\n");
     HANDLE hIOCP = INVALID_HANDLE_VALUE;//Input/Output Completion Port
     hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE/*句柄*/, NULL, NULL, 1/*能够同时访问的线程数*/);//和epoll区别1
+    if (hIOCP == INVALID_HANDLE_VALUE || (hIOCP == NULL)) {
+        printf("create iocp failed! %d\r\n", GetLastError());
+        return 1;
+    }
     HANDLE hThread = (HANDLE)_beginthread(threadQueueEntry, 0, hIOCP);//传到线程里面去
     
     ULONGLONG tick = GetTickCount64();
+    ULONGLONG tick0 = GetTickCount64();
+    int count{}, count0{};
     while (_kbhit() == 0){//如果按键没有按下
         //读写,请求和实现实现了分离
-		if (GetTickCount64() - tick > 1300) {
-			PostQueuedCompletionStatus(hIOCP, sizeof(IOCP_PARAM), (ULONG_PTR)new IOCP_PARAM(IocpListPop, "hello world"), NULL);
+		if (GetTickCount64() - tick0 > 1300) {
+            PostQueuedCompletionStatus(hIOCP, sizeof(IOCP_PARAM), (ULONG_PTR)new IOCP_PARAM(IocpListPop, "hello world", func), NULL);
+            tick0 = GetTickCount64();
+            count0++;
 		}
         if (GetTickCount64() - tick > 2000) {
             PostQueuedCompletionStatus(hIOCP, sizeof(IOCP_PARAM), (ULONG_PTR)new IOCP_PARAM(IocpListPush, "hello world"), NULL);
             tick = GetTickCount64();
+            count++;
         }
         Sleep(1);
     }
@@ -144,7 +163,7 @@ int main()
         WaitForSingleObject(hThread, INFINITE);//无限等待线程结束
     }
     CloseHandle(hIOCP);
-    printf("exit done!\r\n");
+    printf("exit done! count %d count0 %d\r\n", count, count0);
     exit(0);
 
 // 	if (CMyTool::IsAdmin()) {

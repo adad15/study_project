@@ -85,7 +85,7 @@
       <ProgramDataBaseFileName>$(IntDir)vc$(PlatformToolsetVersion)1.pdb</ProgramDataBaseFileName>
     </ClCompile>
     <Link>
-      <SubSystem>Windows</SubSystem>
+      <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
       <UACExecutionLevel>AsInvoker</UACExecutionLevel>
@@ -148,6 +148,7 @@
     <ClInclude Include="framework.h" />
     <ClInclude Include="LockInfoDialog.h" />
     <ClInclude Include="MyTool.h" />
+    <ClInclude Include="MyToolQueue.h" />
     <ClInclude Include="Packet.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="Resource.h" />
@@ -159,6 +160,7 @@
     <ClCompile Include="Command.cpp" />
     <ClCompile Include="LockInfoDialog.cpp" />
     <ClCompile Include="MyTool.cpp" />
+    <ClCompile Include="MyToolQueue.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
