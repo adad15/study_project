@@ -34,19 +34,22 @@ public:
 		m_hCompeletionPort = CreateIoCompletionPort(INVALID_HANDLE_VALUE/*句柄*/, NULL, NULL, 1/*能够同时访问的线程数*/);
 		m_hThread = INVALID_HANDLE_VALUE;
 		if (m_hCompeletionPort != NULL) {
-			m_hThread = (HANDLE)_beginthread(CMyToolQueue<T>::threadEntry, 0, m_hCompeletionPort);
+			m_hThread = (HANDLE)_beginthread(CMyToolQueue<T>::threadEntry, 0, this);
 		}
 	}
 	~CMyToolQueue() {
 		//防止反复调用析构
 		if (m_lock) return;
 		m_lock = true;
-		//防御性编程
-		HANDLE hTemp = m_hCompeletionPort;
 		PostQueuedCompletionStatus(m_hCompeletionPort, 0, NULL, NULL);
 		WaitForSingleObject(m_hThread, INFINITE);//无限等待线程结束
-		m_hCompeletionPort = NULL;
-		CloseHandle(hTemp);
+		if (m_hCompeletionPort != NULL) {
+			//防御性编程
+			HANDLE hTemp = m_hCompeletionPort;
+			m_hCompeletionPort = NULL;
+			CloseHandle(hTemp);
+		}
+		//m_lstData.clear();
 	}
 	bool PushBack(const T& data) {
 		IocpParam* pParam = new IocpParam(MTPush, data);
@@ -56,6 +59,7 @@ public:
 		} 
 		bool ret = PostQueuedCompletionStatus(m_hCompeletionPort, sizeof(PPARAM), (ULONG_PTR)pParam, NULL);
 		if (ret == false) delete pParam;//失败了就不在完成端口进行delte，因为完成端口没有被执行
+		//printf("push back done %d %08p\r\n", ret, (void*)pParam);
 		return ret;
 	}
 	bool PopFront(T& data) {
@@ -105,6 +109,7 @@ public:
 		} 
 		bool ret = PostQueuedCompletionStatus(m_hCompeletionPort, sizeof(PPARAM), (ULONG_PTR)pParam, NULL);
 		if (ret == false) delete pParam;//失败了就不在完成端口进行delte，因为完成端口没有被执行
+		//printf("Clear done %d %08p\r\n", ret, (void*)pParam);
 		return ret;
 	}
 private:
@@ -121,6 +126,7 @@ private:
 		{
 			m_lstData.push_back(pParam->Data);
 			delete pParam;
+			//printf("delete %08p\r\n", (void*)pParam);
 		}
 		break;
 		case MTPop:
@@ -144,6 +150,7 @@ private:
 		{
 			m_lstData.clear();
 			delete pParam;
+			//printf("delete %08p\r\n", (void*)pParam);
 		}
 		break;
 		default:
@@ -165,7 +172,8 @@ private:
 			pParam = (PPARAM*)CompletionKey;
 			DealParam(pParam);
 		}
-		//有数据肯定就不会超时
+		//防御性编程
+		//有数据肯定就不会超时，这是必然的啊，如果有数据GetQueuedCompletionStatus函数必然得到响应，和PostQueuedCompletionStatus就没有任何关系了
 		while (GetQueuedCompletionStatus(m_hCompeletionPort, &dwTransferred, &CompletionKey, &pOverlapped, 0)) {
 			if ((dwTransferred == 0) || (CompletionKey == NULL)) {
 				printf("thread is prepare is exit!\r\n");
@@ -174,7 +182,9 @@ private:
 			pParam = (PPARAM*)CompletionKey;
 			DealParam(pParam);
 		}
-		CloseHandle(m_hCompeletionPort);
+		HANDLE hTemp = m_hCompeletionPort;
+		m_hCompeletionPort = NULL;
+		CloseHandle(hTemp);
 	}
 private:
 	std::list<T> m_lstData;

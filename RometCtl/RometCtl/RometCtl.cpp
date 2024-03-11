@@ -129,31 +129,56 @@ void func(void* arg) {
     delete pstr;
 }
 
+//性能：CMyToolQueue -> push性能高 pop性能仅1/4
+//      list push 性能比 pop低
+void test() {
+	//printf("press any key to exit ...\r\n");
+	CMyToolQueue<std::string> lstStrings;
+	ULONGLONG tick0 = GetTickCount64(), tick = GetTickCount64(), total = GetTickCount64();
+	while (GetTickCount64() - total <= 1000) {
+		//if (GetTickCount64() - tick0 > 10) 
+		{
+			lstStrings.PushBack("hello world");
+			tick0 = GetTickCount64();
+		}
+		//Sleep(1);
+	}
+	printf("exit done! size %d\r\n", lstStrings.Size());
+	total = GetTickCount64();
+	while (GetTickCount64() - total <= 1000) {//超过1秒钟终止
+		//if (GetTickCount64() - tick > 10) 
+		{
+			std::string str;
+			lstStrings.PopFront(str);
+			tick = GetTickCount64();
+			//printf("pop from queue:%s\r\n", str.c_str());
+		}
+		//Sleep(1);
+	}
+	printf("exit done! size %d\r\n", lstStrings.Size());
+	lstStrings.Clear();
+	//和STL中的list对比
+	std::list<std::string> lstData;
+	total = GetTickCount64();
+	while (GetTickCount64() - total <= 1000) {
+		lstData.push_back("hello world!");
+	}
+	printf("lstData push done! size %d\r\n", lstData.size());
+	total = GetTickCount64();
+	while (GetTickCount64() - total <= 1000) {
+		if (lstData.size() > 0) lstData.pop_front();
+	}
+	printf("lstData pop done! size %d\r\n", lstData.size());
+}
+
 int main()
 {
     if (!CMyTool::Init()) return 1;
-    printf("press any key to exit ...\r\n");
-    CMyToolQueue<std::string> lstStrings;
-    ULONGLONG tick0 = GetTickCount64(), tick = GetTickCount64();
-    while (_kbhit() == 0){//如果按键没有按下
-        //读写,请求和实现实现了分离
-		if (GetTickCount64() - tick0 > 1300) {
-            lstStrings.PushBack("hello world");
-            tick0 = GetTickCount64();
-            
-		}
-        if (GetTickCount64() - tick > 2000) {
-            std::string str;
-            lstStrings.PopFront(str);
-            tick = GetTickCount64();
-            printf("pop from queue:%s\r\n", str.c_str());
-        }
-        Sleep(1);
+    for (int i{}; i < 10; i++) {
+		test();
     }
-    printf("exit done! size %d\r\n", lstStrings.Size());
-    lstStrings.Clear();
-    printf("exit done! size %d\r\n", lstStrings.Size());
-    exit(0);
+    
+    //exit(0);//也是直接结束，运行到花括号，也就不会执行析构函数。
 
 // 	if (CMyTool::IsAdmin()) {
 //         if (!CMyTool::Init()) return 1;
