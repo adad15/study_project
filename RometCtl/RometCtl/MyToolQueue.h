@@ -2,6 +2,7 @@
 #include "pch.h"
 #include <mutex>
 #include <atomic>
+#include <list>
 
 template<class T>
 class CMyToolQueue

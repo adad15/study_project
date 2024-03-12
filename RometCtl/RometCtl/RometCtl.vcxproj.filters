@@ -48,6 +48,12 @@
     <ClInclude Include="MyToolQueue.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="MyThread.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="MyServer.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="RometCtl.cpp">
@@ -66,6 +72,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="MyTool.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="MyServer.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

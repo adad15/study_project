@@ -8,6 +8,8 @@
 #include "MyTool.h"
 #include <conio.h>
 #include "MyToolQueue.h"
+#include <MSWSock.h>
+#include "MyServer.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -22,7 +24,6 @@
 #define INVOKE_PATH _T("C:\\Users\\86199\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\RometCtl.exe")
 
 // 唯一的应用程序对象
-//分支001
 CWinApp theApp;
 using namespace std;
 
@@ -55,131 +56,12 @@ bool ChooseAutoInvoke(const CString& strPath) {
     return true;
 }
 
-enum {
-    IocpListEmpty,
-    IocpListPush,
-    IocpListPop
-};
-typedef struct IocpParam {
-	int nOperator;//操作
-	std::string strData;//数据
-	_beginthread_proc_type cbFunc;//回调
-	IocpParam(int op, const char* sData, _beginthread_proc_type cb = NULL) {
-		nOperator = op;
-		strData = sData;
-		cbFunc = cb;
-	}
-	IocpParam() {
-		nOperator = -1;
-	}
-}IOCP_PARAM;
-
-void threadmain(HANDLE hIOCP) {
-	std::list<std::string> lstString;
-	DWORD dwTransferred{};
-	ULONG_PTR CompletionKey{};
-	OVERLAPPED* pOverlapped{ NULL };
-	int count{}, count0{};
-	while (GetQueuedCompletionStatus(hIOCP, &dwTransferred, &CompletionKey, &pOverlapped, INFINITE/*无限等待*/))
-	{
-		if ((dwTransferred == 0) || (CompletionKey == NULL)) {
-			printf("thread is prepare is exit!\r\n");
-			break;
-		}
-		//正式传递数据是使用异步数据，而不是使用CompletionKey。这里是示范
-		IOCP_PARAM* pParam = (IOCP_PARAM*)CompletionKey;
-		if (pParam->nOperator == IocpListPush) {
-			lstString.push_back(pParam->strData);
-			printf("push size %d\r\n", lstString.size());
-			count++;
-		}
-		else if (pParam->nOperator == IocpListPop) {
-			printf("%p size %d\r\n", pParam->cbFunc, lstString.size());
-			std::string* pStr = NULL;
-			if (lstString.size() > 0) {
-				pStr = new std::string(lstString.front());
-				lstString.pop_front();
-			}
-			if (pParam->cbFunc) {
-				pParam->cbFunc(pStr);
-			}
-			count0++;
-		}
-		else if (pParam->nOperator == IocpListEmpty) {
-			lstString.clear();
-		}
-		delete pParam;
-	}
-	printf("count %d count0 %d\r\n", count, count0);
-}
-//处理数据的线程
-void threadQueueEntry(HANDLE hIOCP) {
-    threadmain(hIOCP);
-    _endthread();//代码到此为止，会导致本地对象无法调用析构，从而使得内存泄漏
-}
-//回调函数
-void func(void* arg) {
-    std::string* pstr = (std::string*)arg;
-    if (pstr != NULL) {
-		printf("pop from list:%s\r\n", pstr->c_str());
-    }
-    else {
-        printf("list is empty,no data!\r\n");
-    }
-    delete pstr;
-}
-
-//性能：CMyToolQueue -> push性能高 pop性能仅1/4
-//      list push 性能比 pop低
-void test() {
-	//printf("press any key to exit ...\r\n");
-	CMyToolQueue<std::string> lstStrings;
-	ULONGLONG tick0 = GetTickCount64(), tick = GetTickCount64(), total = GetTickCount64();
-	while (GetTickCount64() - total <= 1000) {
-		//if (GetTickCount64() - tick0 > 10) 
-		{
-			lstStrings.PushBack("hello world");
-			tick0 = GetTickCount64();
-		}
-		//Sleep(1);
-	}
-	printf("exit done! size %d\r\n", lstStrings.Size());
-	total = GetTickCount64();
-	while (GetTickCount64() - total <= 1000) {//超过1秒钟终止
-		//if (GetTickCount64() - tick > 10) 
-		{
-			std::string str;
-			lstStrings.PopFront(str);
-			tick = GetTickCount64();
-			//printf("pop from queue:%s\r\n", str.c_str());
-		}
-		//Sleep(1);
-	}
-	printf("exit done! size %d\r\n", lstStrings.Size());
-	lstStrings.Clear();
-	//和STL中的list对比
-	std::list<std::string> lstData;
-	total = GetTickCount64();
-	while (GetTickCount64() - total <= 1000) {
-		lstData.push_back("hello world!");
-	}
-	printf("lstData push done! size %d\r\n", lstData.size());
-	total = GetTickCount64();
-	while (GetTickCount64() - total <= 1000) {
-		if (lstData.size() > 0) lstData.pop_front();
-	}
-	printf("lstData pop done! size %d\r\n", lstData.size());
-}
+void iocp();
 
 int main()
 {
     if (!CMyTool::Init()) return 1;
-    for (int i{}; i < 10; i++) {
-		test();
-    }
-    
-    //exit(0);//也是直接结束，运行到花括号，也就不会执行析构函数。
-
+    iocp();
 // 	if (CMyTool::IsAdmin()) {
 //         if (!CMyTool::Init()) return 1;
 // 		//printf("current is run as administrator!\r\n");//命令行输出屏蔽掉了，不能printf
@@ -209,4 +91,22 @@ int main()
 // 		MessageBox(NULL, _T("普通用户已变更为管理员"), _T("用户状态"), 0);
 // 	}
     return 0;
+}
+
+class COverlapped {
+public:
+    OVERLAPPED m_overlapped;
+    DWORD m_operator;
+    char m_buffer[4096];
+    COverlapped() {
+        m_operator = 0;
+        memset(&m_overlapped, 0, sizeof(m_overlapped));
+        memset(&m_buffer, 0, sizeof(m_buffer));
+    }
+};
+
+void iocp() {
+    CMyServer server;
+    server.StartServic();
+    getchar();
 }

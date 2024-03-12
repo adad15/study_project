@@ -180,7 +180,7 @@ private:
 		WSADATA wsaData;    //接收 Windows Sockets 实现的详细信息
 		int err;
 		//通过MAKEWORD(1, 1)指定程序请求 Winsock 1.1 版本
-		wVersionRequested = MAKEWORD(1, 1);
+		wVersionRequested = MAKEWORD(2, 0);
 		// 初始化套接字库
 		//这个函数要求传入期望使用的 Winsock 版本和一个 `WSADATA` 结构体指针。函数返回 `0` 表示成功。
 		err = WSAStartup(wVersionRequested, &wsaData);
@@ -189,7 +189,7 @@ private:
 			return FALSE;
 		}
 		//这行代码检查 Winsock 库的实际版本是否与请求的版本兼容。
-		if (LOBYTE(wsaData.wVersion) != 1 || HIBYTE(wsaData.wVersion) != 1)
+		if (LOBYTE(wsaData.wVersion) != 2 || HIBYTE(wsaData.wVersion) != 0)
 		{
 			//如果版本不兼容，则调用WSACleanup函数卸载Winsock库。
 			WSACleanup();
