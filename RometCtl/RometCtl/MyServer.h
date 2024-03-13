@@ -3,6 +3,7 @@
 #include "MyToolQueue.h"
 #include <map>
 #include <MSWSock.h>
+#include "MyTool.h"
 
 
 enum MyOperator{
@@ -66,7 +67,9 @@ public:
 	}
 
 	LPWSABUF RecvWSABuffer();
+	LPWSAOVERLAPPED RecvOverlapped();
 	LPWSABUF SendWSABuffer();
+	LPWSAOVERLAPPED SendOverlapped();
 
 	DWORD& flags() { return m_flags; }
 
@@ -81,6 +84,7 @@ public:
 		if (ret <= 0) return -1;
 		m_used += (size_t)ret;
 		//TODO 解析数据还没有完成
+		CMyTool::Dump((BYTE*)m_buffer.data(), ret);
 		return 0;
 	}
 	int Send(void* buffer, size_t nSize) {
@@ -169,6 +173,7 @@ public:
 		m_client.clear();
 		CloseHandle(m_hIOCP);
 		m_pool.Stop();
+		WSACleanup();
 	}
 	bool StartServic();
 
@@ -180,15 +185,21 @@ public:
 		if (AcceptEx(m_sock, *pClient, *pClient/*使用了operator PVOID()*/, 0, sizeof(sockaddr_in) + 16,
 			sizeof(sockaddr_in) + 16, *pClient/*operator LPDWORD()*/, *pClient/*operator LPOVERLAPPED()*/) == FALSE)
 		{
-			closesocket(m_sock);
-			m_sock = INVALID_SOCKET;
-			m_hIOCP = INVALID_HANDLE_VALUE;
-			return false;
+			TRACE("%d\r\n", WSAGetLastError());
+			if (WSAGetLastError() != WSA_IO_PENDING) {
+				closesocket(m_sock);
+				m_sock = INVALID_SOCKET;
+				m_hIOCP = INVALID_HANDLE_VALUE;
+				return false;
+			}
 		}
 		return true;
 	}
+	void BindNewSocket(SOCKET s);
 private:
 	void CreatSocket() {
+		WSADATA WSAData;
+		WSAStartup(MAKEWORD(2, 2), &WSAData);
 		m_sock = WSASocket(PF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
 		int opt = 1;
 		//设置套接字属性

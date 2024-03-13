@@ -7,10 +7,11 @@
 
 class ThreadFuncBase {};
 typedef int (ThreadFuncBase::* FUNCTYPE)();//ThreadFuncBase的成员函数指针
+
 class ThreadWork {
 public:
 	ThreadWork() :thiz(NULL), func(NULL) {}
-	ThreadWork(ThreadFuncBase* obj, FUNCTYPE f) :thiz(obj), func(f) {}
+	ThreadWork(void* obj, FUNCTYPE f) :thiz((ThreadFuncBase*)obj), func(f) {}//多继承数据偏移
 	ThreadWork(const ThreadWork& worker)
 	{
 		thiz = worker.thiz;
@@ -109,7 +110,9 @@ private:
 						OutputDebugString(str);
 					}
 					if (ret < 0) {
+						::ThreadWork* pWorker = m_worker.load();
 						m_worker.store(NULL);
+						delete pWorker;
 					}
 				}
 			}

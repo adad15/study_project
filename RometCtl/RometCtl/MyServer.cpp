@@ -17,14 +17,18 @@ template<MyOperator op>
 int AcceptOverlapped<op>::AcceptWorker() {
 	INT lLength{}, rLength{};
 	//使用CMyClient::operator LPDWORD()
-	if (*(LPDWORD)*m_client > 0) {
+	if (m_client->GetBufferSize() > 0) {
+		sockaddr* plocal = NULL, * premote = NULL;
 		GetAcceptExSockaddrs(*m_client, 0, sizeof(sockaddr_in) + 16, sizeof(sockaddr_in) + 16,
-			(sockaddr**)m_client->GetLocalAddr(), &lLength/*本地地址*/,
-			(sockaddr**)m_client->GetRemoteAddr(), &rLength/*远程地址*/);
-		
-		int ret = WSARecv((SOCKET)*m_client, m_client->RecvWSABuffer(), 1, *m_client, & m_client->flags(), *m_client, NULL);
-		if (ret == SOCKET_ERROR && (WSAGetLastError() != WSA_IO_PENDING)) {
+			(sockaddr**)&plocal, &lLength/*本地地址*/,
+			(sockaddr**)&premote, &rLength/*远程地址*/);
+		memcpy(m_client->GetLocalAddr(), plocal, sizeof(sockaddr_in));
+		memcpy(m_client->GetRemoteAddr(), premote, sizeof(sockaddr_in));
+		m_pserver->BindNewSocket(*m_client);
 
+		int ret = WSARecv((SOCKET)*m_client, m_client->RecvWSABuffer(), 1, *m_client, & m_client->flags(), m_client->RecvOverlapped(), NULL);
+		if (ret == SOCKET_ERROR && (WSAGetLastError() != WSA_IO_PENDING)) {
+			TRACE("ret=%d error =%d\r\n", ret, WSAGetLastError());
 		}
 		if (!m_pserver->NewAccept()) {
 			return -2;
@@ -72,6 +76,14 @@ CMyClient::operator LPOVERLAPPED() {
 LPWSABUF CMyClient::RecvWSABuffer()
 {
 	return &m_recv->m_wsabuffer;
+}
+LPWSAOVERLAPPED CMyClient::RecvOverlapped()
+{
+	return &m_recv->m_overlapped;
+}
+LPWSAOVERLAPPED CMyClient::SendOverlapped()
+{
+	return &m_send->m_overlapped;
 }
 int CMyClient::SendData(std::vector<char>& data)
 {
@@ -125,8 +137,10 @@ int CMyServer::threadIocp()
 	ULONG_PTR CompletionKey{};
 	OVERLAPPED* lpOverlapped{ NULL };
 	if (GetQueuedCompletionStatus(m_hIOCP, &tranferred, &CompletionKey, &lpOverlapped, INFINITE)) {
-		if (tranferred > 0 && (CompletionKey != 0)) {
+		if (CompletionKey != 0) {
 			CMyOverlapped* pOverlapped = CONTAINING_RECORD(lpOverlapped, CMyOverlapped, m_overlapped);
+			TRACE("pOverlapped->m_operator %d\r\n", pOverlapped->m_operator);
+			pOverlapped->m_pserver = this;
 			//交给其他线程来做
 			switch (pOverlapped->m_operator) {
 			case MyAccept:
@@ -160,4 +174,9 @@ int CMyServer::threadIocp()
 		}
 	}
 	return 0;
+}
+
+void CMyServer::BindNewSocket(SOCKET s)
+{
+	CreateIoCompletionPort((HANDLE)s, m_hIOCP, (ULONG_PTR)this, 0);
 }
