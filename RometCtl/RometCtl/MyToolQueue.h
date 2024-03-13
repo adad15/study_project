@@ -3,6 +3,9 @@
 #include <mutex>
 #include <atomic>
 #include <list>
+#include "MyThread.h"
+
+#pragma warning(disable:4407)
 
 template<class T>
 class CMyToolQueue
@@ -38,7 +41,7 @@ public:
 			m_hThread = (HANDLE)_beginthread(CMyToolQueue<T>::threadEntry, 0, this);
 		}
 	}
-	~CMyToolQueue() {
+	virtual ~CMyToolQueue() {
 		//防止反复调用析构
 		if (m_lock) return;
 		m_lock = true;
@@ -63,7 +66,7 @@ public:
 		//printf("push back done %d %08p\r\n", ret, (void*)pParam);
 		return ret;
 	}
-	bool PopFront(T& data) {
+	virtual bool PopFront(T& data) {
 		HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
 		IocpParam Param(MTPop, data, hEvent);
 		if (m_lock) {
@@ -113,13 +116,13 @@ public:
 		//printf("Clear done %d %08p\r\n", ret, (void*)pParam);
 		return ret;
 	}
-private:
+protected:
 	static void threadEntry(void* arg) {
 		CMyToolQueue<T>* thiz = (CMyToolQueue<T>*)arg;
 		thiz->threadMain();
 		_endthread();
 	}
-	void DealParam(PPARAM* pParam) {
+	virtual void DealParam(PPARAM* pParam) {
 		//正式传递数据是使用异步数据，而不是使用CompletionKey。这里是示范
 		switch (pParam->nOperator)
 		{
@@ -187,9 +190,102 @@ private:
 		m_hCompeletionPort = NULL;
 		CloseHandle(hTemp);
 	}
-private:
+protected:
 	std::list<T> m_lstData;
 	HANDLE m_hCompeletionPort;
 	HANDLE m_hThread;
 	std::atomic<bool> m_lock;//原子变量
 };
+
+template<class T>
+class MySendQueue :public CMyToolQueue<T>, public ThreadFuncBase
+{
+public:
+	typedef int(ThreadFuncBase::* EDYCALLBACK)(T& data);
+	MySendQueue(ThreadFuncBase* obj, EDYCALLBACK callback)
+		:CMyToolQueue<T>(), m_base(obj), m_callback(callback) {
+		m_thread.Start();
+		m_thread.UpdataWorker(::ThreadWork(this, (FUNCTYPE) & MySendQueue<T>::threadTick));
+	}
+	virtual ~MySendQueue() {
+		m_base = NULL;
+		m_callback = NULL;
+		m_thread.Stop();
+	}
+protected:
+	//纯虚函数可以删除
+	//virtual bool PopFront(T& data) = delete; 
+	virtual bool PopFront(T& data) { return false; }
+	bool PopFront()
+	{
+		//模板编程里面类型参数变化之后，编译器重新生成一套所有的东西，所以要明确指明
+		typename CMyToolQueue<T>::IocpParam* Param = new typename CMyToolQueue<T>::IocpParam(CMyToolQueue<T>::MTPop, T());
+		if (CMyToolQueue<T>::m_lock/*要注明是父类的*/) {
+			delete Param;
+			return false;
+		}
+		bool ret = PostQueuedCompletionStatus(CMyToolQueue<T>::m_hCompeletionPort, sizeof(*Param), (ULONG_PTR)&Param, NULL);
+		if (ret == false) {
+			delete Param;
+			return false;
+		}
+		return ret;
+	}
+	int threadTick() {
+		if (WaitForSingleObject(CMyToolQueue<T>::m_hThread, 0) != WAIT_TIMEOUT)
+			return 0;
+		if (CMyToolQueue<T>::m_lstData.size() > 0) {
+			PopFront();
+		}
+		Sleep(1);
+		return 0;
+	}
+	//typename告诉编译器T是按照前面已知参数来进行处理
+	virtual void DealParam(typename CMyToolQueue<T>::PPARAM* pParam) {
+		//正式传递数据是使用异步数据，而不是使用CompletionKey。这里是示范
+		switch (pParam->nOperator)
+		{
+		case CMyToolQueue<T>::MTPush:
+		{
+			CMyToolQueue<T>::m_lstData.push_back(pParam->Data);
+			delete pParam;
+			//printf("delete %08p\r\n", (void*)pParam);
+		}
+		break;
+		case CMyToolQueue<T>::MTPop:
+		{
+			if (CMyToolQueue<T>::m_lstData.size() > 0) {
+				pParam->Data = CMyToolQueue<T>::m_lstData.front();
+				if ((m_base->*m_callback)(pParam->Data) == 0) {
+					CMyToolQueue<T>::m_lstData.pop_front();
+				}
+			}
+			delete pParam;
+		}
+		break;
+		case CMyToolQueue<T>::MTSize:
+		{
+			pParam->nOperator = CMyToolQueue<T>::m_lstData.size();
+			if (pParam->hEvent != NULL)
+				SetEvent(pParam->hEvent);
+		}
+		break;
+		case CMyToolQueue<T>::MTClear:
+		{
+			CMyToolQueue<T>::m_lstData.clear();
+			delete pParam;
+			//printf("delete %08p\r\n", (void*)pParam);
+		}
+		break;
+		default:
+			OutputDebugStringA("unknown operator!\r\n");
+			break;
+		}
+	}
+private:
+	ThreadFuncBase* m_base;
+	EDYCALLBACK m_callback;
+	CMyThread m_thread;
+};
+
+typedef MySendQueue<std::vector<char>>::EDYCALLBACK SENDCALLBACK;

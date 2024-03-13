@@ -43,6 +43,7 @@ class CMyThread
 public:
 	CMyThread() {
 		m_hThread = NULL;
+		m_bStatus = false;
 	}
 	~CMyThread() {
 		Stop();
@@ -60,6 +61,7 @@ public:
 		if (m_hThread == NULL || (m_hThread == INVALID_HANDLE_VALUE)) return false;
 		return WaitForSingleObject(m_hThread, 0) == WAIT_TIMEOUT;
 	}
+
 	bool Stop() {
 		if (m_bStatus == false) return true;
 		m_bStatus = false;
@@ -68,37 +70,44 @@ public:
 		return ret;
 	}
 
-	bool UpdataWorker(const ::ThreadWork& worker = ::ThreadWork()) {
-		if (!worker.IsValid()) {
-			m_worker.store(NULL);
-			return false;
-		}
-		if (m_worker.load() != NULL) {
+	void UpdataWorker(const ::ThreadWork& worker = ::ThreadWork()) {
+		if (m_worker.load() != NULL && (m_worker.load() != &worker)) {
 			::ThreadWork* pWorker = m_worker.load();
 			m_worker.store(NULL);
 			delete pWorker;
 		}
+		if (m_worker.load() == &worker)return;
+		if (!worker.IsValid()) {
+			m_worker.store(NULL);
+			return;
+		}
 		m_worker.store(new ::ThreadWork(worker));
-		return true;
 	}
 	//判断是不是空闲的,true表示空闲
 	bool IsIdle() {
-		return !m_worker.load()->IsValid();
+		if (m_worker.load() == NULL) return true;
+		return!m_worker.load()->IsValid();
 	}
 private:
 	void ThreadWorker() {
 		while (m_bStatus) {
+			if (m_worker.load() == NULL) {
+				Sleep(1);
+				continue;
+			}
 			//load 函数用于获取原子变量的当前值
 			::ThreadWork worker = *m_worker.load();
 			if (worker.IsValid()) {
-				int ret = worker();
-				if (ret != 0) {
-					CString str;
-					str.Format(_T("thread found warning code %d\r\n"), ret);
-					OutputDebugString(str);
-				}
-				if (ret < 0) {
-					m_worker.store(NULL);
+				if (WaitForSingleObject(m_hThread, 0) == WAIT_TIMEOUT) {
+					int ret = worker();
+					if (ret != 0) {
+						CString str;
+						str.Format(_T("thread found warning code %d\r\n"), ret);
+						OutputDebugString(str);
+					}
+					if (ret < 0) {
+						m_worker.store(NULL);
+					}
 				}
 			}
 			else {//没有命令处理时，该线程空转，不会关闭，避免_beginthread重复执行造成的性能浪费
@@ -131,11 +140,15 @@ public:
 	CMyThreadPool() {}
 	~CMyThreadPool() {
 		Stop();
+		for (size_t i{}; i < m_threads.size(); i++) {
+			delete m_threads[i];
+			m_threads[i] = NULL;
+		}
 		m_threads.clear();
 	}
 	bool Invoke() { 
 		bool ret = true;
-		for (size_t i{}; i < m_threads.size(); i++) {
+ 		for (size_t i{}; i < m_threads.size(); i++) {
 			if (m_threads[i]->Start() == false) {
 				ret = false;
 				break;

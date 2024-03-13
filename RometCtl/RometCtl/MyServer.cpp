@@ -1,5 +1,7 @@
 #include "pch.h"
 #include "MyServer.h"
+#include "MyTool.h"
+
 #pragma warning(disable:4407)
 
 template<MyOperator op>
@@ -15,7 +17,7 @@ template<MyOperator op>
 int AcceptOverlapped<op>::AcceptWorker() {
 	INT lLength{}, rLength{};
 	//使用CMyClient::operator LPDWORD()
-	if (*(LPDWORD)*m_client.get() > 0) {
+	if (*(LPDWORD)*m_client > 0) {
 		GetAcceptExSockaddrs(*m_client, 0, sizeof(sockaddr_in) + 16, sizeof(sockaddr_in) + 16,
 			(sockaddr**)m_client->GetLocalAddr(), &lLength/*本地地址*/,
 			(sockaddr**)m_client->GetRemoteAddr(), &rLength/*远程地址*/);
@@ -50,7 +52,8 @@ inline SendOverlapped<op>::SendOverlapped() {
 CMyClient::CMyClient() :m_isbusy(false), m_flags(0),
 	m_overlapped(new ACCEPTOVERLAPPED()),
 	m_recv(new RECVOVERLAPPED()),
-	m_send(new SENDOVERLAPPED())
+	m_send(new SENDOVERLAPPED()),
+	m_sendBuffer(this,(SENDCALLBACK)& CMyClient::SendData)
 {
 	m_sock = WSASocket(PF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
 	m_buffer.resize(1024);
@@ -58,9 +61,9 @@ CMyClient::CMyClient() :m_isbusy(false), m_flags(0),
 	memset(&m_raddr, 0, sizeof(m_raddr));
 }
 void CMyClient::SetOverlapped(PCLIENT& ptr) {
-	m_overlapped->m_client = ptr;
-	m_recv->m_client = ptr;
-	m_send->m_client = ptr;
+	m_overlapped->m_client = ptr.get();
+	m_recv->m_client = ptr.get();
+	m_send->m_client = ptr.get();
 }
 CMyClient::operator LPOVERLAPPED() {
 	return &m_overlapped->m_overlapped;
@@ -69,6 +72,19 @@ CMyClient::operator LPOVERLAPPED() {
 LPWSABUF CMyClient::RecvWSABuffer()
 {
 	return &m_recv->m_wsabuffer;
+}
+int CMyClient::SendData(std::vector<char>& data)
+{
+	//看有没有后续的需要send
+	if (m_sendBuffer.Size() > 0) {
+		//返回0表示成功
+		int ret = WSASend(m_sock, SendWSABuffer(), 1, &m_received, m_flags, &m_send->m_overlapped, NULL);
+		if (ret != 0 && (WSAGetLastError() != WSA_IO_PENDING)) {
+			CMyTool::ShowError();
+			return -1;
+		}
+	}
+	return 0;
 }
 LPWSABUF CMyClient::SendWSABuffer()
 {
@@ -111,6 +127,7 @@ int CMyServer::threadIocp()
 	if (GetQueuedCompletionStatus(m_hIOCP, &tranferred, &CompletionKey, &lpOverlapped, INFINITE)) {
 		if (tranferred > 0 && (CompletionKey != 0)) {
 			CMyOverlapped* pOverlapped = CONTAINING_RECORD(lpOverlapped, CMyOverlapped, m_overlapped);
+			//交给其他线程来做
 			switch (pOverlapped->m_operator) {
 			case MyAccept:
 			{

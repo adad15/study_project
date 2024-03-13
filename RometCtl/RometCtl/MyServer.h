@@ -4,6 +4,7 @@
 #include <map>
 #include <MSWSock.h>
 
+
 enum MyOperator{
     MyNone,
     MyAccept,
@@ -30,15 +31,23 @@ public:
     std::vector<char> m_buffer;//缓冲区
     ThreadWork m_worker;//处理函数
     CMyServer* m_pserver;//服务器对象
-	PCLIENT m_client;//对应的客户端
+	CMyClient* m_client;//对应的客户端
 	WSABUF m_wsabuffer;
+	virtual ~CMyOverlapped() {
+		m_buffer.clear();
+	}
 };
 
-class CMyClient {
+class CMyClient :public ThreadFuncBase {
 public:
 	CMyClient();
 	~CMyClient() {
 		closesocket(m_sock);
+		m_recv.reset();
+		m_send.reset();
+		m_overlapped.reset();
+		m_buffer.clear();
+		m_sendBuffer.Clear();
 	}
 	//传递参数，CMyClient类指针,设置
 	void SetOverlapped(PCLIENT& ptr);
@@ -66,6 +75,7 @@ public:
 	size_t GetBufferSize() const{
 		return m_buffer.size();
 	}
+	//接口
 	int Recv() {
 		int ret = recv(m_sock, m_buffer.data() + m_used, m_buffer.size() - m_used, 0);
 		if (ret <= 0) return -1;
@@ -73,7 +83,16 @@ public:
 		//TODO 解析数据还没有完成
 		return 0;
 	}
+	int Send(void* buffer, size_t nSize) {
+		std::vector<char>data(nSize);
+		memcpy(data.data(), buffer, nSize);
+		if (m_sendBuffer.PushBack(data))
+			return 0;
+		return -1;
+	}
+	int SendData(std::vector<char>& data);
 private:
+
 	SOCKET m_sock;
 	DWORD m_received;
 	DWORD m_flags;
@@ -85,6 +104,7 @@ private:
 	sockaddr_in m_laddr;
 	sockaddr_in m_raddr;
 	bool m_isbusy;
+	MySendQueue<std::vector<char>>m_sendBuffer;//发送数据队列
 };
 
 template<MyOperator>
@@ -109,6 +129,10 @@ class SendOverlapped :public CMyOverlapped, ThreadFuncBase {
 public:
 	SendOverlapped();
 	int SendWorker() {
+		/*
+		* 1.send 可能不会立即完成
+		* 
+		*/
 		return -1;
 	}
 };
@@ -136,8 +160,16 @@ public:
 		m_addr.sin_port = htons(port);
 		m_addr.sin_addr.s_addr = inet_addr(ip.c_str());
     }
-    ~CMyServer() {}
+    ~CMyServer() {
+		std::map<SOCKET, PCLIENT>::iterator it = m_client.begin();
+		for (; it != m_client.end(); it++) {
+			it->second.reset();
+		}
+		m_client.clear();
+		m_pool.Stop();
+	}
 	bool StartServic();
+
 	bool NewAccept() {
 		PCLIENT pClient{ new CMyClient() };
 		pClient->SetOverlapped(pClient);//客户端指针加入到Overlapped里面
