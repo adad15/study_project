@@ -65,9 +65,12 @@ public:
 	bool Stop() {
 		if (m_bStatus == false) return true;
 		m_bStatus = false;
-		bool ret = WaitForSingleObject(m_hThread, INFINITE) == WAIT_OBJECT_0;
+		DWORD ret = WaitForSingleObject(m_hThread, 1000);//INFINITE有问题
+		if (ret == WAIT_TIMEOUT) {
+			TerminateThread(m_hThread, -1);//这个一直等待的线程就是ThreadWorker里面的m_hThread，一开始线程池里面的GetQueuedCompletionStatus(m_hIOCP, &tranferred, &CompletionKey, &lpOverlapped, INFINITE)
+		}
 		UpdataWorker();
-		return ret;
+		return ret == WAIT_OBJECT_0;
 	}
 
 	void UpdataWorker(const ::ThreadWork& worker = ::ThreadWork()) {

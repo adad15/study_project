@@ -161,11 +161,13 @@ public:
 		m_addr.sin_addr.s_addr = inet_addr(ip.c_str());
     }
     ~CMyServer() {
+		closesocket(m_sock);
 		std::map<SOCKET, PCLIENT>::iterator it = m_client.begin();
 		for (; it != m_client.end(); it++) {
 			it->second.reset();
 		}
 		m_client.clear();
+		CloseHandle(m_hIOCP);
 		m_pool.Stop();
 	}
 	bool StartServic();
